@@ -498,6 +498,9 @@ async function importFromUrl(url) {
 
 // Analyze text for off-voice moments
 async function analyzeText(text, context = {}) {
+  // Ensure we have latest state (worker may have been idle)
+  await loadState();
+
   if (!settings?.apiKey) {
     return { error: 'No API key configured' };
   }
