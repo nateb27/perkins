@@ -750,12 +750,30 @@ function updateVoicePatterns() {
   }
 
   // Parse summary into display items
-  const patterns = state.voiceProfile.summary.split('.').filter(p => p.trim());
+  // Split on sentence boundaries (period followed by space and capital letter)
+  // This preserves periods inside quotes
+  const summary = state.voiceProfile.summary.trim();
+  let patterns = [];
 
-  const patternsHtml = patterns.slice(0, 5).map(pattern => `
+  // Try splitting on newlines first (if AI returned line-separated)
+  if (summary.includes('\n')) {
+    patterns = summary.split('\n')
+      .map(p => p.replace(/^[-•*\d.]+\s*/, '').trim()) // Remove bullet/number prefixes
+      .filter(p => p.length > 10);
+  }
+
+  // Fall back to sentence splitting
+  if (patterns.length === 0) {
+    // Split on ". " followed by capital letter, preserving content in quotes
+    patterns = summary.split(/\.\s+(?=[A-Z])/)
+      .map(p => p.trim().replace(/\.$/, '')) // Remove trailing period
+      .filter(p => p.length > 10);
+  }
+
+  const patternsHtml = patterns.slice(0, 6).map(pattern => `
     <div class="pattern-item">
       <span class="pattern-icon">✓</span>
-      <span>${escapeHtml(pattern.trim())}</span>
+      <span>${escapeHtml(pattern)}</span>
     </div>
   `).join('');
 
