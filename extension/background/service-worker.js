@@ -3,11 +3,37 @@
  * Handles AI API calls and message routing
  */
 
+import { decrypt, isEncrypted } from '../lib/crypto.js';
+
 // State cache (loaded from storage)
 let settings = null;
 let voiceProfile = null;
 let learnedExceptions = [];
 let coachEnabled = false;
+
+// Rate limiting
+const rateLimiter = {
+  calls: [],
+  maxCallsPerMinute: 10,
+  cooldownMs: 60000,
+
+  canMakeCall() {
+    const now = Date.now();
+    // Remove calls older than 1 minute
+    this.calls = this.calls.filter(t => now - t < this.cooldownMs);
+    return this.calls.length < this.maxCallsPerMinute;
+  },
+
+  recordCall() {
+    this.calls.push(Date.now());
+  },
+
+  getTimeUntilNextCall() {
+    if (this.canMakeCall()) return 0;
+    const oldest = Math.min(...this.calls);
+    return Math.max(0, this.cooldownMs - (Date.now() - oldest));
+  }
+};
 
 // Initialize on install/startup
 chrome.runtime.onInstalled.addListener(async () => {
@@ -38,8 +64,21 @@ async function loadState() {
   }
 }
 
-// Message handler
+// Message handler with sender validation
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Validate sender - only accept messages from our extension
+  const isFromExtension = sender.id === chrome.runtime.id;
+  const isFromPopup = !sender.tab; // Popup has no tab
+  const isFromContentScript = sender.tab &&
+    (sender.url?.startsWith('https://docs.google.com') ||
+     sender.url?.startsWith('https://mail.google.com'));
+
+  if (!isFromExtension || (!isFromPopup && !isFromContentScript)) {
+    console.warn('Rejected message from unauthorized sender:', sender);
+    sendResponse({ error: 'Unauthorized' });
+    return;
+  }
+
   handleMessage(message, sender).then(sendResponse).catch(err => {
     console.error('Message handler error:', err);
     sendResponse({ error: err.message });
@@ -161,6 +200,13 @@ async function analyzeText(text, context = {}) {
   if (!text || text.trim().length < 20) {
     return { suggestions: [] };
   }
+
+  // Rate limiting check
+  if (!rateLimiter.canMakeCall()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
+    return { error: `Rate limited. Please wait ${waitTime} seconds.`, rateLimited: true };
+  }
+  rateLimiter.recordCall();
 
   const intensityGuide = {
     gentle: 'Only flag major deviations that clearly don\'t match the voice. Be conservative.',
@@ -292,13 +338,34 @@ async function callAI(prompt) {
   }
 }
 
+/**
+ * Get decrypted API key
+ */
+async function getApiKey() {
+  const storedKey = settings.apiKey;
+  if (!storedKey) return '';
+
+  // Check if key is encrypted (doesn't start with sk-)
+  if (isEncrypted(storedKey)) {
+    return await decrypt(storedKey);
+  }
+
+  // Return as-is if not encrypted (legacy or just set)
+  return storedKey;
+}
+
 // Call Claude API
 async function callClaude(prompt) {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
+    throw new Error('No API key configured');
+  }
+
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
+      'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true'
     },
@@ -325,11 +392,16 @@ async function callClaude(prompt) {
 
 // Call OpenAI API
 async function callOpenAI(prompt) {
+  const apiKey = await getApiKey();
+  if (!apiKey) {
+    throw new Error('No API key configured');
+  }
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`
+      'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       model: 'gpt-4o',

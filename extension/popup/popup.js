@@ -3,6 +3,8 @@
  * Handles tab switching, settings management, and voice training
  */
 
+import { encrypt, decrypt, isEncrypted } from '../lib/crypto.js';
+
 // DOM Elements
 const elements = {
   // Status
@@ -159,7 +161,13 @@ function initSettings() {
     });
   });
 
-  elements.apiKeyInput.value = state.settings.apiKey;
+  // Show masked placeholder if API key is encrypted
+  if (state.settings.apiKey && isEncrypted(state.settings.apiKey)) {
+    elements.apiKeyInput.value = '';
+    elements.apiKeyInput.placeholder = 'API key saved (encrypted)';
+  } else {
+    elements.apiKeyInput.value = state.settings.apiKey;
+  }
   elements.intensitySelect.value = state.settings.intensity;
   elements.passiveVoiceCheck.checked = state.settings.checks.passiveVoice;
   elements.sentenceLengthCheck.checked = state.settings.checks.sentenceLength;
@@ -175,7 +183,22 @@ function initSettings() {
 
   // Save settings
   elements.saveSettingsBtn.addEventListener('click', async () => {
-    state.settings.apiKey = elements.apiKeyInput.value.trim();
+    const rawApiKey = elements.apiKeyInput.value.trim();
+
+    // Encrypt API key if it looks like a raw key (starts with sk-)
+    if (rawApiKey && (rawApiKey.startsWith('sk-') || rawApiKey.startsWith('sk-ant-'))) {
+      try {
+        state.settings.apiKey = await encrypt(rawApiKey);
+      } catch (err) {
+        console.error('Failed to encrypt API key:', err);
+        showToast('Failed to secure API key', 'error');
+        return;
+      }
+    } else {
+      // Keep as-is if already encrypted or empty
+      state.settings.apiKey = rawApiKey;
+    }
+
     state.settings.intensity = elements.intensitySelect.value;
     state.settings.styleGuide = elements.styleGuideInput.value.trim();
     state.settings.checks.passiveVoice = elements.passiveVoiceCheck.checked;
