@@ -36,7 +36,10 @@ const elements = {
   intensitySelect: document.getElementById('intensity'),
   passiveVoiceCheck: document.getElementById('passive-voice'),
   sentenceLengthCheck: document.getElementById('sentence-length'),
-  wordChoiceCheck: document.getElementById('word-choice')
+  wordChoiceCheck: document.getElementById('word-choice'),
+  checkGrammarCheck: document.getElementById('check-grammar'),
+  styleGuideInput: document.getElementById('style-guide'),
+  learnedExceptions: document.getElementById('learned-exceptions')
 };
 
 // State
@@ -45,10 +48,12 @@ let state = {
     provider: 'anthropic',
     apiKey: '',
     intensity: 'balanced',
+    styleGuide: '',
     checks: {
       passiveVoice: true,
       sentenceLength: true,
-      wordChoice: true
+      wordChoice: true,
+      grammar: true
     }
   },
   voiceProfile: {
@@ -56,6 +61,7 @@ let state = {
     summary: null,
     lastUpdated: null
   },
+  learnedExceptions: [], // Patterns the user has marked as intentional
   stats: {
     suggestionsToday: 0,
     acceptedToday: 0,
@@ -83,6 +89,7 @@ async function loadState() {
     const stored = await chrome.storage.local.get([
       'settings',
       'voiceProfile',
+      'learnedExceptions',
       'stats',
       'coachEnabled',
       'recentSuggestions'
@@ -90,6 +97,7 @@ async function loadState() {
 
     if (stored.settings) state.settings = { ...state.settings, ...stored.settings };
     if (stored.voiceProfile) state.voiceProfile = { ...state.voiceProfile, ...stored.voiceProfile };
+    if (stored.learnedExceptions) state.learnedExceptions = stored.learnedExceptions;
     if (stored.stats) state.stats = { ...state.stats, ...stored.stats };
     if (stored.coachEnabled !== undefined) state.coachEnabled = stored.coachEnabled;
     if (stored.recentSuggestions) state.recentSuggestions = stored.recentSuggestions;
@@ -113,6 +121,7 @@ async function saveState() {
     await chrome.storage.local.set({
       settings: state.settings,
       voiceProfile: state.voiceProfile,
+      learnedExceptions: state.learnedExceptions,
       stats: state.stats,
       coachEnabled: state.coachEnabled,
       recentSuggestions: state.recentSuggestions
@@ -155,6 +164,8 @@ function initSettings() {
   elements.passiveVoiceCheck.checked = state.settings.checks.passiveVoice;
   elements.sentenceLengthCheck.checked = state.settings.checks.sentenceLength;
   elements.wordChoiceCheck.checked = state.settings.checks.wordChoice;
+  elements.checkGrammarCheck.checked = state.settings.checks.grammar;
+  elements.styleGuideInput.value = state.settings.styleGuide || '';
 
   // Toggle API key visibility
   elements.toggleKeyBtn.addEventListener('click', () => {
@@ -166,16 +177,22 @@ function initSettings() {
   elements.saveSettingsBtn.addEventListener('click', async () => {
     state.settings.apiKey = elements.apiKeyInput.value.trim();
     state.settings.intensity = elements.intensitySelect.value;
+    state.settings.styleGuide = elements.styleGuideInput.value.trim();
     state.settings.checks.passiveVoice = elements.passiveVoiceCheck.checked;
     state.settings.checks.sentenceLength = elements.sentenceLengthCheck.checked;
     state.settings.checks.wordChoice = elements.wordChoiceCheck.checked;
+    state.settings.checks.grammar = elements.checkGrammarCheck.checked;
 
     await saveState();
     updateUI();
     showToast('Settings saved!', 'success');
 
     // Notify background worker of settings change
-    chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', settings: state.settings });
+    chrome.runtime.sendMessage({
+      type: 'SETTINGS_UPDATED',
+      settings: state.settings,
+      learnedExceptions: state.learnedExceptions
+    });
   });
 }
 
@@ -309,6 +326,9 @@ function updateUI() {
 
   // Update voice patterns display
   updateVoicePatterns();
+
+  // Update learned exceptions display
+  updateLearnedExceptions();
 }
 
 // Update recent suggestions display
@@ -371,6 +391,47 @@ function updateVoicePatterns() {
   `;
 }
 
+// Update learned exceptions display
+function updateLearnedExceptions() {
+  const container = elements.learnedExceptions;
+  if (!container) return;
+
+  if (state.learnedExceptions.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <p>No exceptions yet. When you reject a suggestion, Perkins learns it's intentional.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const exceptionsHtml = state.learnedExceptions.slice(0, 10).map((exc, i) => `
+    <div class="exception-item">
+      <span class="exception-text">"${escapeHtml(exc.pattern)}"</span>
+      <button class="exception-remove" data-index="${i}" title="Remove exception">&times;</button>
+    </div>
+  `).join('');
+
+  container.innerHTML = exceptionsHtml;
+
+  // Bind remove buttons
+  container.querySelectorAll('.exception-remove').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const index = parseInt(btn.dataset.index);
+      state.learnedExceptions.splice(index, 1);
+      await saveState();
+      updateLearnedExceptions();
+      showToast('Exception removed', 'success');
+
+      // Notify background worker
+      chrome.runtime.sendMessage({
+        type: 'EXCEPTIONS_UPDATED',
+        learnedExceptions: state.learnedExceptions
+      });
+    });
+  });
+}
+
 // Toast notification
 function showToast(message, type = 'info') {
   // Remove existing toast
@@ -418,6 +479,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       state.stats.totalAccepted++;
       saveState();
       updateUI();
+      break;
+
+    case 'SUGGESTION_REJECTED':
+      // Add to learned exceptions when user rejects a suggestion
+      if (message.suggestion && message.suggestion.original) {
+        const pattern = message.suggestion.original.trim();
+        // Avoid duplicates
+        if (!state.learnedExceptions.some(e => e.pattern === pattern)) {
+          state.learnedExceptions.push({
+            pattern: pattern,
+            reason: message.suggestion.reason || 'User marked as intentional',
+            addedAt: new Date().toISOString()
+          });
+          // Keep only last 50 exceptions
+          state.learnedExceptions = state.learnedExceptions.slice(-50);
+          saveState();
+          updateLearnedExceptions();
+        }
+      }
       break;
 
     case 'STATS_UPDATE':

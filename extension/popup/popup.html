@@ -178,6 +178,39 @@
             <span class="checkbox-text">Suggest on-brand word choices</span>
           </label>
         </div>
+
+        <div class="setting-group">
+          <label class="checkbox">
+            <input type="checkbox" id="check-grammar" checked>
+            <span class="checkbox-mark"></span>
+            <span class="checkbox-text">Catch typos and grammar mistakes</span>
+          </label>
+          <span class="setting-hint">Only flags genuine mistakes, not your intentional style choices.</span>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <h3>Style Guide <span class="badge">B2B</span></h3>
+        <p class="instruction">Paste your company's brand guidelines or style guide. Perkins will ensure your writing stays on-brand.</p>
+
+        <div class="setting-group">
+          <textarea
+            id="style-guide"
+            placeholder="e.g., Always use Oxford commas. Write 'email' not 'e-mail'. Avoid exclamation points. Use sentence case for headlines..."
+            rows="4"
+          ></textarea>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <h3>Learned Exceptions</h3>
+        <p class="instruction">Patterns you've told Perkins are intentional, not mistakes.</p>
+
+        <div class="learned-exceptions" id="learned-exceptions">
+          <div class="empty-state">
+            <p>No exceptions yet. When you reject a suggestion, Perkins learns it's intentional.</p>
+          </div>
+        </div>
       </div>
     </section>
 

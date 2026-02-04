@@ -6,6 +6,7 @@
 // State cache (loaded from storage)
 let settings = null;
 let voiceProfile = null;
+let learnedExceptions = [];
 let coachEnabled = false;
 
 // Initialize on install/startup
@@ -21,9 +22,16 @@ chrome.runtime.onStartup.addListener(async () => {
 // Load state from storage
 async function loadState() {
   try {
-    const stored = await chrome.storage.local.get(['settings', 'voiceProfile', 'coachEnabled']);
-    settings = stored.settings || { provider: 'anthropic', apiKey: '', intensity: 'balanced' };
+    const stored = await chrome.storage.local.get(['settings', 'voiceProfile', 'learnedExceptions', 'coachEnabled']);
+    settings = stored.settings || {
+      provider: 'anthropic',
+      apiKey: '',
+      intensity: 'balanced',
+      styleGuide: '',
+      checks: { grammar: true }
+    };
     voiceProfile = stored.voiceProfile || { samples: [], summary: null };
+    learnedExceptions = stored.learnedExceptions || [];
     coachEnabled = stored.coachEnabled || false;
   } catch (err) {
     console.error('Failed to load state:', err);
@@ -43,6 +51,13 @@ async function handleMessage(message, sender) {
   switch (message.type) {
     case 'SETTINGS_UPDATED':
       settings = message.settings;
+      if (message.learnedExceptions) {
+        learnedExceptions = message.learnedExceptions;
+      }
+      return { success: true };
+
+    case 'EXCEPTIONS_UPDATED':
+      learnedExceptions = message.learnedExceptions || [];
       return { success: true };
 
     case 'VOICE_PROFILE_RESET':
@@ -65,6 +80,7 @@ async function handleMessage(message, sender) {
       return {
         settings,
         voiceProfile,
+        learnedExceptions,
         coachEnabled
       };
 
@@ -152,26 +168,49 @@ async function analyzeText(text, context = {}) {
     strict: 'Flag any text that doesn\'t strongly match the established voice patterns.'
   };
 
-  const prompt = `You are a writing coach helping someone maintain their unique voice. Your job is to identify moments where the writing doesn't match their established style.
+  // Build style guide section
+  const styleGuideSection = settings.styleGuide
+    ? `\nCOMPANY STYLE GUIDE:\n${settings.styleGuide}\n`
+    : '';
+
+  // Build learned exceptions section
+  const exceptionsSection = learnedExceptions.length > 0
+    ? `\nLEARNED EXCEPTIONS (patterns the user has confirmed are intentional - DO NOT flag these):\n${learnedExceptions.map(e => `- "${e.pattern}"`).join('\n')}\n`
+    : '';
+
+  // Build grammar instruction
+  const grammarInstruction = settings.checks?.grammar
+    ? `
+GRAMMAR & TYPOS:
+Also check for likely typos and grammar mistakes (their/they're, its/it's, etc.). BUT only flag these if they appear to be genuine mistakes, not intentional style choices. If the user consistently uses informal grammar in their samples, respect that. Frame grammar suggestions helpfully: "Did you mean 'their' here?" not "Grammar error."`
+    : '\nDo NOT flag grammar or spelling issues - focus only on voice.';
+
+  const prompt = `You are a personalized writing coach. You understand this specific writer's voice deeply and help them stay true to it. You're not enforcing generic "good writing" rules - you're helping them sound like THEMSELVES.
 
 VOICE PROFILE:
 ${voiceProfile.summary}
 
-SAMPLE WRITINGS (for reference):
+SAMPLE WRITINGS (this is how they naturally write):
 ${voiceProfile.samples.slice(0, 3).map(s => `"${s.text.substring(0, 200)}..."`).join('\n')}
-
+${styleGuideSection}${exceptionsSection}
 COACHING INTENSITY: ${settings.intensity}
 ${intensityGuide[settings.intensity] || intensityGuide.balanced}
+${grammarInstruction}
 
 TEXT TO ANALYZE:
 """
 ${text}
 """
 
-Analyze this text and identify any phrases or sentences that don't match the writer's voice profile. For each issue found, provide:
-1. The exact problematic text
-2. A suggested revision that matches their voice
-3. A brief, personalized explanation (e.g., "You never write passively" or "This is more formal than your usual style")
+Analyze this text and identify:
+1. Moments that don't match the writer's established voice/style
+2. Deviations from the company style guide (if provided)
+3. Likely typos or grammar mistakes (if grammar checking is enabled)
+
+For each issue, provide:
+- The exact problematic text
+- A suggested revision that matches THEIR voice (not generic "better writing")
+- A brief, personalized explanation that references their specific patterns
 
 Respond in this exact JSON format:
 {
@@ -179,18 +218,22 @@ Respond in this exact JSON format:
     {
       "original": "exact text from the input",
       "suggestion": "revised version matching their voice",
-      "reason": "brief personalized explanation"
+      "reason": "brief personalized explanation",
+      "type": "voice|style_guide|grammar"
     }
   ]
 }
 
 If the text matches their voice well, return: {"suggestions": []}
 
-IMPORTANT:
-- Only flag genuine voice mismatches, not grammar issues
-- Keep suggestions true to THEIR voice, not generic "good writing"
-- Be encouraging, not critical
-- Maximum 3 suggestions per analysis`;
+CRITICAL RULES:
+- This is about THEIR voice, not "correct" writing
+- If they use sentence fragments for punch, that's their style - don't flag it
+- If they start sentences with "And" or "But", that's intentional - don't flag it
+- Reference their specific patterns in explanations (e.g., "You usually write shorter sentences")
+- Be encouraging and helpful, like a trusted editor who knows them
+- Maximum 3 suggestions per analysis
+- Never flag anything in the LEARNED EXCEPTIONS list`;
 
   try {
     const response = await callAI(prompt);
@@ -208,6 +251,17 @@ IMPORTANT:
     } catch (parseErr) {
       console.error('Failed to parse AI response:', parseErr);
       result = { suggestions: [] };
+    }
+
+    // Filter out any suggestions that match learned exceptions
+    if (result.suggestions && learnedExceptions.length > 0) {
+      result.suggestions = result.suggestions.filter(s => {
+        const original = s.original.toLowerCase().trim();
+        return !learnedExceptions.some(e =>
+          original.includes(e.pattern.toLowerCase()) ||
+          e.pattern.toLowerCase().includes(original)
+        );
+      });
     }
 
     // Notify popup of new suggestions
@@ -327,5 +381,11 @@ async function handleFeedback(suggestion, accepted) {
   // Update stats in popup
   if (accepted) {
     chrome.runtime.sendMessage({ type: 'SUGGESTION_ACCEPTED' }).catch(() => {});
+  } else {
+    // Notify popup that suggestion was rejected (to add to learned exceptions)
+    chrome.runtime.sendMessage({
+      type: 'SUGGESTION_REJECTED',
+      suggestion
+    }).catch(() => {});
   }
 }
