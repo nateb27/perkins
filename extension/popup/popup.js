@@ -41,8 +41,6 @@ const elements = {
   sampleCount: document.getElementById('sample-count'),
   voicePatterns: document.getElementById('voice-patterns'),
   resetVoiceBtn: document.getElementById('reset-voice'),
-  importUrlInput: document.getElementById('import-url'),
-  importUrlBtn: document.getElementById('import-url-btn'),
 
   // Settings tab
   providerRadios: document.querySelectorAll('input[name="provider"]'),
@@ -393,45 +391,6 @@ function initVoiceTraining() {
 
     // Notify background worker
     chrome.runtime.sendMessage({ type: 'VOICE_PROFILE_RESET' });
-  });
-
-  // Import from URL
-  elements.importUrlBtn.addEventListener('click', async () => {
-    const url = elements.importUrlInput.value.trim();
-    if (!url) {
-      showToast('Enter a URL', 'error');
-      return;
-    }
-
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      showToast('Enter a valid URL starting with http:// or https://', 'error');
-      return;
-    }
-
-    elements.importUrlBtn.disabled = true;
-    elements.importUrlBtn.textContent = 'Importing...';
-
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'IMPORT_URL',
-        url: url
-      });
-
-      if (response.error) {
-        showToast(response.error, 'error');
-      } else {
-        state.voiceProfile = response.voiceProfile;
-        await saveState();
-        updateUI();
-        showToast('Article imported!', 'success');
-        elements.importUrlInput.value = '';
-      }
-    } catch (err) {
-      showToast('Import failed. Try again.', 'error');
-    }
-
-    elements.importUrlBtn.disabled = false;
-    elements.importUrlBtn.textContent = 'Import';
   });
 }
 
