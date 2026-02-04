@@ -358,12 +358,17 @@ function initVoiceTraining() {
         samples: state.voiceProfile.samples
       });
 
-      if (response && response.summary) {
+      if (response && response.error) {
+        showToast('Error: ' + response.error, 'error');
+        console.error('Voice profile error:', response.error);
+      } else if (response && response.summary) {
         state.voiceProfile.summary = response.summary;
         state.voiceProfile.lastUpdated = new Date().toISOString();
+        showToast('Voice profile updated!', 'success');
       }
     } catch (err) {
       console.error('Failed to update voice profile:', err);
+      showToast('Failed to analyze voice. Check console for details.', 'error');
     }
 
     await saveState();

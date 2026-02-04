@@ -227,8 +227,11 @@ async function broadcastToContentScripts(message) {
 
 // Update voice profile with new samples
 async function updateVoiceProfile(samples) {
+  // Ensure we have latest settings (worker may have been idle)
+  await loadState();
+
   if (!settings?.apiKey) {
-    return { error: 'No API key configured' };
+    return { error: 'No API key configured. Go to Settings tab and add your API key.' };
   }
 
   voiceProfile.samples = samples;
