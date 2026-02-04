@@ -103,7 +103,8 @@ chrome.runtime.onStartup.addListener(async () => {
 async function loadState() {
   try {
     const stored = await chrome.storage.local.get(['settings', 'voiceProfile', 'learnedExceptions', 'coachEnabled']);
-    console.log('Perkins loadState: stored.settings exists:', !!stored.settings, 'apiKey exists:', !!stored.settings?.apiKey);
+    // SECURITY: Reduced logging - don't expose settings details
+    console.log('Perkins: State loaded');
     settings = stored.settings || {
       provider: 'anthropic',
       apiKey: '',
@@ -353,6 +354,13 @@ async function learnFromDocument(text, source, title) {
 
 // Import from URL (fetch and extract article text)
 async function importFromUrl(url) {
+  // SECURITY: Rate limit URL imports to prevent abuse
+  if (!rateLimiter.canMakeCall()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
+    return { error: `Rate limited. Please wait ${waitTime} seconds.`, rateLimited: true };
+  }
+  rateLimiter.recordCall();
+
   // Ensure we have latest state (worker may have been idle)
   await loadState();
 
@@ -372,6 +380,11 @@ async function importFromUrl(url) {
       parsedUrl = new URL(url);
     } catch {
       return { error: 'Invalid URL format' };
+    }
+
+    // SECURITY: Only allow http/https URLs
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { error: 'Only HTTP/HTTPS URLs are allowed' };
     }
 
     const response = await fetch(url, {
@@ -502,7 +515,7 @@ async function analyzeText(text, context = {}) {
   // Ensure we have latest state (worker may have been idle)
   await loadState();
 
-  console.log('Perkins analyzeText: settings loaded, apiKey exists:', !!settings?.apiKey);
+  // SECURITY: Reduced logging
 
   if (!settings?.apiKey) {
     return { error: 'No API key configured' };
@@ -678,10 +691,13 @@ CRITICAL RULES:
       };
     }
 
-    // Cache successful result
-    analysisCache.set(normalizedText, result);
+    // SECURITY: Sanitize AI response before caching and returning
+    const sanitizedResult = sanitizeAIResponse(result);
 
-    return result;
+    // Cache successful result
+    analysisCache.set(normalizedText, sanitizedResult);
+
+    return sanitizedResult;
   } catch (err) {
     console.error('Failed to analyze text:', err);
     return { error: err.message };
@@ -872,6 +888,55 @@ function calculateTextSimilarity(text1, text2) {
   return intersection.size / union.size;
 }
 
+// SECURITY: Sanitize AI response suggestions to prevent XSS
+function sanitizeAIResponse(result) {
+  if (!result) return result;
+
+  // Sanitize suggestions array
+  if (result.suggestions && Array.isArray(result.suggestions)) {
+    result.suggestions = result.suggestions.map(s => ({
+      original: sanitizeText(s.original),
+      suggestion: sanitizeText(s.suggestion),
+      reason: sanitizeText(s.reason),
+      type: sanitizeText(s.type)
+    }));
+  }
+
+  // Sanitize detections
+  if (result.detections) {
+    if (result.detections.aiIndicators && Array.isArray(result.detections.aiIndicators)) {
+      result.detections.aiIndicators = result.detections.aiIndicators.map(sanitizeText);
+    }
+    if (result.detections.genericIndicators && Array.isArray(result.detections.genericIndicators)) {
+      result.detections.genericIndicators = result.detections.genericIndicators.map(sanitizeText);
+    }
+  }
+
+  // Sanitize summary if present
+  if (result.summary) {
+    result.summary = sanitizeText(result.summary);
+  }
+
+  // Sanitize text if present (for generate responses)
+  if (result.text) {
+    result.text = sanitizeText(result.text);
+  }
+
+  // Sanitize reply if present (for chat responses)
+  if (result.reply) {
+    result.reply = sanitizeText(result.reply);
+  }
+
+  return result;
+}
+
+// Strip HTML tags from text to prevent XSS
+function sanitizeText(text) {
+  if (!text || typeof text !== 'string') return text || '';
+  // Remove HTML tags
+  return text.replace(/<[^>]*>/g, '').trim();
+}
+
 // Full document review for side-by-side view
 async function reviewDocument(text) {
   if (!settings?.apiKey) {
@@ -973,7 +1038,8 @@ RULES:
       });
     }
 
-    return result;
+    // SECURITY: Sanitize AI response
+    return sanitizeAIResponse(result);
   } catch (err) {
     console.error('Document review failed:', err);
     return { error: err.message };
@@ -1018,7 +1084,8 @@ Respond helpfully and conversationally. Keep responses concise (2-3 paragraphs m
 
   try {
     const reply = await callAI(prompt);
-    return { reply };
+    // SECURITY: Sanitize AI response
+    return sanitizeAIResponse({ reply });
   } catch (err) {
     console.error('Chat failed:', err);
     return { error: err.message };
@@ -1078,7 +1145,8 @@ CRITICAL RULES:
 
   try {
     const text = await callAI(aiPrompt);
-    return { text };
+    // SECURITY: Sanitize AI response
+    return sanitizeAIResponse({ text });
   } catch (err) {
     console.error('Generate failed:', err);
     return { error: err.message };

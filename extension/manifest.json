@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Perkins - Your Writing Voice Coach",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Learn your writing voice and get personalized coaching to sound more like yourself, everywhere you write.",
   "icons": {
     "16": "icons/icon16.png",
@@ -28,8 +28,7 @@
     "https://docs.google.com/*",
     "https://mail.google.com/*",
     "https://api.anthropic.com/*",
-    "https://api.openai.com/*",
-    "https://*/*"
+    "https://api.openai.com/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js",

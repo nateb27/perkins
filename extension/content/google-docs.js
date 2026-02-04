@@ -378,7 +378,8 @@
     lastAnalyzedText = text;
     lastAnalyzeTime = now;
 
-    console.log('Perkins: Analyzing text...', text.substring(0, 50) + '...');
+    // SECURITY: Don't log document text to console
+    console.log('Perkins: Analyzing text...');
 
     // Show loading state
     showPanelLoading();

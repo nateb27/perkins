@@ -470,16 +470,17 @@
   }
 
   // Apply a suggestion to the compose body
+  // SECURITY: Use text-based replacement to prevent XSS from AI-generated suggestions
   function applySuggestion(messageBody, suggestion) {
-    const html = messageBody.innerHTML;
-    const text = messageBody.innerText;
+    const text = messageBody.innerText || messageBody.textContent;
 
-    // Try to find and replace in HTML
-    if (html.includes(suggestion.original)) {
-      messageBody.innerHTML = html.replace(suggestion.original, suggestion.suggestion);
-    } else if (text.includes(suggestion.original)) {
-      // Fallback to text replacement
-      messageBody.innerText = text.replace(suggestion.original, suggestion.suggestion);
+    // Validate suggestion contains only text (no HTML tags)
+    const sanitizedSuggestion = sanitizeText(suggestion.suggestion);
+    const sanitizedOriginal = sanitizeText(suggestion.original);
+
+    // Use text-based replacement only (safe from XSS)
+    if (text.includes(sanitizedOriginal)) {
+      messageBody.innerText = text.replace(sanitizedOriginal, sanitizedSuggestion);
     }
 
     // Record as accepted
@@ -889,6 +890,15 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Sanitize text to remove any potential HTML/script content
+  function sanitizeText(text) {
+    if (!text) return '';
+    // Strip HTML tags and decode entities
+    const div = document.createElement('div');
+    div.innerHTML = text;
+    return div.textContent || div.innerText || '';
   }
 
 })();
