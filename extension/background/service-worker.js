@@ -103,6 +103,7 @@ chrome.runtime.onStartup.addListener(async () => {
 async function loadState() {
   try {
     const stored = await chrome.storage.local.get(['settings', 'voiceProfile', 'learnedExceptions', 'coachEnabled']);
+    console.log('Perkins loadState: stored.settings exists:', !!stored.settings, 'apiKey exists:', !!stored.settings?.apiKey);
     settings = stored.settings || {
       provider: 'anthropic',
       apiKey: '',
@@ -500,6 +501,8 @@ async function importFromUrl(url) {
 async function analyzeText(text, context = {}) {
   // Ensure we have latest state (worker may have been idle)
   await loadState();
+
+  console.log('Perkins analyzeText: settings loaded, apiKey exists:', !!settings?.apiKey);
 
   if (!settings?.apiKey) {
     return { error: 'No API key configured' };
