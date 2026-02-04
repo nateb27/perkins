@@ -283,6 +283,12 @@
           <span class="perkins-status-text">Watching your writing...</span>
         </div>
       </div>
+      <div class="perkins-panel-footer">
+        <button class="perkins-btn perkins-btn-learn" title="Add this document to your voice profile">
+          <span class="perkins-learn-icon">📝</span>
+          Learn from this doc
+        </button>
+      </div>
     `;
 
     document.body.appendChild(panel);
@@ -290,9 +296,47 @@
     // Event listeners
     panel.querySelector('.perkins-btn-minimize').addEventListener('click', toggleMinimize);
     panel.querySelector('.perkins-btn-close').addEventListener('click', disableCoach);
+    panel.querySelector('.perkins-btn-learn').addEventListener('click', learnFromDocument);
 
     // Initially hidden
     panel.classList.add('perkins-hidden');
+  }
+
+  async function learnFromDocument() {
+    const text = extractDocumentText();
+
+    if (!text || text.length < 100) {
+      showTemporaryMessage('Document is too short to learn from.');
+      return;
+    }
+
+    // Show loading state on button
+    const btn = panel.querySelector('.perkins-btn-learn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="perkins-learn-icon">⏳</span> Learning...';
+    btn.disabled = true;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'LEARN_FROM_DOCUMENT',
+        text: text,
+        source: 'google-docs',
+        title: document.title || 'Google Doc'
+      });
+
+      if (response.error) {
+        showTemporaryMessage(response.error);
+      } else {
+        showTemporaryMessage('Added to your voice profile!');
+      }
+    } catch (err) {
+      console.error('Perkins: Failed to learn from document', err);
+      showTemporaryMessage('Failed to learn. Try again.');
+    }
+
+    // Restore button
+    btn.innerHTML = originalText;
+    btn.disabled = false;
   }
 
   function showPanel() {

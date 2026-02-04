@@ -123,6 +123,15 @@ async function handleMessage(message, sender) {
         coachEnabled
       };
 
+    case 'LEARN_FROM_DOCUMENT':
+      return await learnFromDocument(message.text, message.source, message.title);
+
+    case 'IMPORT_TWITTER':
+      return await importFromTwitter(message.handle);
+
+    case 'IMPORT_URL':
+      return await importFromUrl(message.url);
+
     default:
       return { error: 'Unknown message type' };
   }
@@ -184,6 +193,224 @@ Respond with ONLY the voice profile as a series of short observations separated 
   } catch (err) {
     console.error('Failed to generate voice summary:', err);
     return { error: err.message };
+  }
+}
+
+// Learn from a document (passive learning)
+async function learnFromDocument(text, source, title) {
+  if (!text || text.length < 100) {
+    return { error: 'Document is too short to learn from' };
+  }
+
+  // Truncate if too long (keep first 5000 chars)
+  const truncatedText = text.length > 5000 ? text.substring(0, 5000) + '...' : text;
+
+  // Add as a sample
+  voiceProfile.samples.push({
+    text: truncatedText,
+    source: source || 'document',
+    title: title || 'Untitled',
+    addedAt: new Date().toISOString()
+  });
+
+  // Keep only last 20 samples
+  voiceProfile.samples = voiceProfile.samples.slice(-20);
+
+  // Re-generate voice summary if we have an API key
+  if (settings?.apiKey) {
+    try {
+      const result = await updateVoiceProfile(voiceProfile.samples);
+      return { success: true, voiceProfile, summary: result.summary };
+    } catch (err) {
+      // Still save the sample even if summary generation fails
+      await chrome.storage.local.set({ voiceProfile });
+      return { success: true, voiceProfile, warning: 'Sample added but summary update failed' };
+    }
+  }
+
+  await chrome.storage.local.set({ voiceProfile });
+  return { success: true, voiceProfile };
+}
+
+// Import from Twitter (using Nitter as a proxy for public tweets)
+async function importFromTwitter(handle) {
+  if (!handle) {
+    return { error: 'No Twitter handle provided' };
+  }
+
+  // Clean handle
+  handle = handle.replace(/^@/, '');
+
+  try {
+    // Try multiple Nitter instances (they can be unreliable)
+    const nitterInstances = [
+      'nitter.net',
+      'nitter.privacydev.net',
+      'nitter.poast.org'
+    ];
+
+    let tweets = [];
+    let lastError = null;
+
+    for (const instance of nitterInstances) {
+      try {
+        const response = await fetch(`https://${instance}/${handle}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+
+        if (!response.ok) continue;
+
+        const html = await response.text();
+
+        // Extract tweets from HTML (Nitter uses .tweet-content class)
+        const tweetMatches = html.match(/<div class="tweet-content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi) || [];
+
+        tweets = tweetMatches
+          .map(match => {
+            // Strip HTML tags
+            return match.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          })
+          .filter(t => t.length > 30 && t.length < 1000) // Filter reasonable length tweets
+          .slice(0, 20); // Take up to 20 tweets
+
+        if (tweets.length > 0) break;
+      } catch (err) {
+        lastError = err;
+        continue;
+      }
+    }
+
+    if (tweets.length === 0) {
+      return { error: 'Could not fetch tweets. The account may be private or Twitter/Nitter may be unavailable.' };
+    }
+
+    // Add tweets as samples
+    for (const tweet of tweets) {
+      voiceProfile.samples.push({
+        text: tweet,
+        source: 'twitter',
+        title: `@${handle}`,
+        addedAt: new Date().toISOString()
+      });
+    }
+
+    // Keep only last 20 samples
+    voiceProfile.samples = voiceProfile.samples.slice(-20);
+
+    // Update voice summary
+    if (settings?.apiKey) {
+      await updateVoiceProfile(voiceProfile.samples);
+    }
+
+    await chrome.storage.local.set({ voiceProfile });
+
+    return { success: true, voiceProfile, count: tweets.length };
+  } catch (err) {
+    console.error('Twitter import failed:', err);
+    return { error: 'Failed to import tweets. Try again later.' };
+  }
+}
+
+// Import from URL (fetch and extract article text)
+async function importFromUrl(url) {
+  if (!url) {
+    return { error: 'No URL provided' };
+  }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      return { error: `Failed to fetch URL: ${response.status}` };
+    }
+
+    const html = await response.text();
+
+    // Extract article content using common patterns
+    let articleText = '';
+
+    // Try to find article content
+    const articlePatterns = [
+      /<article[^>]*>([\s\S]*?)<\/article>/i,
+      /<div[^>]*class="[^"]*post-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*class="[^"]*article-body[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<main[^>]*>([\s\S]*?)<\/main>/i
+    ];
+
+    for (const pattern of articlePatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        articleText = match[1];
+        break;
+      }
+    }
+
+    // Fallback: get body content
+    if (!articleText) {
+      const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      if (bodyMatch) {
+        articleText = bodyMatch[1];
+      }
+    }
+
+    if (!articleText) {
+      return { error: 'Could not extract content from this page' };
+    }
+
+    // Strip HTML tags and clean up
+    articleText = articleText
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+      .replace(/<header[\s\S]*?<\/header>/gi, '')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (articleText.length < 200) {
+      return { error: 'Article content is too short' };
+    }
+
+    // Truncate if too long
+    if (articleText.length > 5000) {
+      articleText = articleText.substring(0, 5000) + '...';
+    }
+
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : new URL(url).hostname;
+
+    // Add as sample
+    voiceProfile.samples.push({
+      text: articleText,
+      source: 'url',
+      title: title,
+      url: url,
+      addedAt: new Date().toISOString()
+    });
+
+    // Keep only last 20 samples
+    voiceProfile.samples = voiceProfile.samples.slice(-20);
+
+    // Update voice summary
+    if (settings?.apiKey) {
+      await updateVoiceProfile(voiceProfile.samples);
+    }
+
+    await chrome.storage.local.set({ voiceProfile });
+
+    return { success: true, voiceProfile };
+  } catch (err) {
+    console.error('URL import failed:', err);
+    return { error: 'Failed to import from URL. Check the URL and try again.' };
   }
 }
 

@@ -280,6 +280,48 @@
   animation: perkins-pulse 1.5s ease-in-out infinite;
 }
 
+/* Panel Footer */
+.perkins-panel-footer {
+  padding: 8px;
+  border-top: 1px solid #e8e4de;
+  background: #f8f5f0;
+}
+
+.perkins-btn-learn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px dashed #e8e4de;
+  border-radius: 6px;
+  color: #5a5a5a;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.perkins-btn-learn:hover {
+  background: #fef4ed;
+  border-color: #e07a3d;
+  color: #e07a3d;
+}
+
+.perkins-btn-learn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.perkins-learn-icon {
+  font-size: 14px;
+}
+
+#perkins-panel.perkins-minimized .perkins-panel-footer {
+  display: none;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   #perkins-panel {
