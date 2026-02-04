@@ -968,7 +968,7 @@ function showTutorial() {
     },
     {
       title: 'Step 2: Train Your Voice',
-      content: 'Add writing samples so Perkins can learn YOUR voice. Paste text, import from URLs, or let it learn as you write.',
+      content: 'Paste your best writing so Perkins can learn YOUR voice. Emails, blog posts, anything that sounds like you.',
       icon: '✍️',
       highlight: 'voice'
     },
