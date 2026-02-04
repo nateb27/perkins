@@ -19,7 +19,6 @@
   let ambientLearningEnabled = false;
   let typedCharCount = 0;
   let lastAmbientLearnTime = 0;
-  let ambientLearnBuffer = '';
   let isTyping = false;
   let lastKeyTime = 0;
 

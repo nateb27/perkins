@@ -147,6 +147,10 @@ async function handleMessage(message, sender) {
     case 'GENERATE_IN_VOICE':
       return await generateInVoice(message.prompt, message.length);
 
+    case 'SUGGESTION_FEEDBACK':
+      handleFeedback(message.suggestion, message.accepted);
+      return { success: true };
+
     default:
       return { error: 'Unknown message type' };
   }
@@ -975,13 +979,6 @@ CRITICAL RULES:
     return { error: err.message };
   }
 }
-
-// Handle feedback (accept/reject suggestions)
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'SUGGESTION_FEEDBACK') {
-    handleFeedback(message.suggestion, message.accepted);
-  }
-});
 
 async function handleFeedback(suggestion, accepted) {
   // Store feedback for future learning
