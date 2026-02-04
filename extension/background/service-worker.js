@@ -230,6 +230,11 @@ async function updateVoiceProfile(samples) {
   // Ensure we have latest settings (worker may have been idle)
   await loadState();
 
+  // Initialize voiceProfile if null
+  if (!voiceProfile) {
+    voiceProfile = { samples: [], summary: null };
+  }
+
   if (!settings?.apiKey) {
     return { error: 'No API key configured. Go to Settings tab and add your API key.' };
   }
