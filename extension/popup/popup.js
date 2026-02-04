@@ -101,7 +101,14 @@ async function loadState() {
       'recentSuggestions'
     ]);
 
-    if (stored.settings) state.settings = { ...state.settings, ...stored.settings };
+    if (stored.settings) {
+      state.settings = {
+        ...state.settings,
+        ...stored.settings,
+        // Deep merge checks object to preserve defaults
+        checks: { ...state.settings.checks, ...(stored.settings.checks || {}) }
+      };
+    }
     if (stored.voiceProfile) state.voiceProfile = { ...state.voiceProfile, ...stored.voiceProfile };
     if (stored.learnedExceptions) state.learnedExceptions = stored.learnedExceptions;
     if (stored.stats) state.stats = { ...state.stats, ...stored.stats };
