@@ -29,9 +29,6 @@
     "https://mail.google.com/*",
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
-    "https://nitter.net/*",
-    "https://nitter.privacydev.net/*",
-    "https://nitter.poast.org/*",
     "https://*/*"
   ],
   "background": {

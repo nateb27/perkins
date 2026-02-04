@@ -126,9 +126,6 @@ async function handleMessage(message, sender) {
     case 'LEARN_FROM_DOCUMENT':
       return await learnFromDocument(message.text, message.source, message.title);
 
-    case 'IMPORT_TWITTER':
-      return await importFromTwitter(message.handle);
-
     case 'IMPORT_URL':
       return await importFromUrl(message.url);
 
@@ -235,87 +232,6 @@ async function learnFromDocument(text, source, title) {
   return { success: true, voiceProfile };
 }
 
-// Import from Twitter (using Nitter as a proxy for public tweets)
-async function importFromTwitter(handle) {
-  if (!handle) {
-    return { error: 'No Twitter handle provided' };
-  }
-
-  // Clean handle
-  handle = handle.replace(/^@/, '');
-
-  try {
-    // Try multiple Nitter instances (they can be unreliable)
-    const nitterInstances = [
-      'nitter.net',
-      'nitter.privacydev.net',
-      'nitter.poast.org'
-    ];
-
-    let tweets = [];
-    let lastError = null;
-
-    for (const instance of nitterInstances) {
-      try {
-        const response = await fetch(`https://${instance}/${handle}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        });
-
-        if (!response.ok) continue;
-
-        const html = await response.text();
-
-        // Extract tweets from HTML (Nitter uses .tweet-content class)
-        const tweetMatches = html.match(/<div class="tweet-content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi) || [];
-
-        tweets = tweetMatches
-          .map(match => {
-            // Strip HTML tags
-            return match.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          })
-          .filter(t => t.length > 30 && t.length < 1000) // Filter reasonable length tweets
-          .slice(0, 20); // Take up to 20 tweets
-
-        if (tweets.length > 0) break;
-      } catch (err) {
-        lastError = err;
-        continue;
-      }
-    }
-
-    if (tweets.length === 0) {
-      return { error: 'Could not fetch tweets. The account may be private or Twitter/Nitter may be unavailable.' };
-    }
-
-    // Add tweets as samples
-    for (const tweet of tweets) {
-      voiceProfile.samples.push({
-        text: tweet,
-        source: 'twitter',
-        title: `@${handle}`,
-        addedAt: new Date().toISOString()
-      });
-    }
-
-    // Keep only last 20 samples
-    voiceProfile.samples = voiceProfile.samples.slice(-20);
-
-    // Update voice summary
-    if (settings?.apiKey) {
-      await updateVoiceProfile(voiceProfile.samples);
-    }
-
-    await chrome.storage.local.set({ voiceProfile });
-
-    return { success: true, voiceProfile, count: tweets.length };
-  } catch (err) {
-    console.error('Twitter import failed:', err);
-    return { error: 'Failed to import tweets. Try again later.' };
-  }
-}
-
 // Import from URL (fetch and extract article text)
 async function importFromUrl(url) {
   if (!url) {
@@ -323,14 +239,28 @@ async function importFromUrl(url) {
   }
 
   try {
+    // Validate URL format
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return { error: 'Invalid URL format' };
+    }
+
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      mode: 'cors',
+      credentials: 'omit'
     });
 
     if (!response.ok) {
-      return { error: `Failed to fetch URL: ${response.status}` };
+      if (response.status === 403 || response.status === 401) {
+        return { error: 'This site blocks automated access. Copy the text and paste it above.' };
+      }
+      return { error: `Failed to fetch URL (${response.status}). Try copying the text instead.` };
     }
 
     const html = await response.text();
@@ -413,7 +343,11 @@ async function importFromUrl(url) {
     return { success: true, voiceProfile };
   } catch (err) {
     console.error('URL import failed:', err);
-    return { error: 'Failed to import from URL. Check the URL and try again.' };
+    // CORS errors and network failures typically throw here
+    if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+      return { error: 'This site blocks cross-origin requests. Copy the text and paste it above.' };
+    }
+    return { error: 'Import failed. Try copying the text and pasting it above.' };
   }
 }
 

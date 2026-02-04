@@ -29,8 +29,6 @@ const elements = {
   sampleCount: document.getElementById('sample-count'),
   voicePatterns: document.getElementById('voice-patterns'),
   resetVoiceBtn: document.getElementById('reset-voice'),
-  twitterHandleInput: document.getElementById('twitter-handle'),
-  importTwitterBtn: document.getElementById('import-twitter'),
   importUrlInput: document.getElementById('import-url'),
   importUrlBtn: document.getElementById('import-url-btn'),
 
@@ -294,43 +292,6 @@ function initVoiceTraining() {
 
     // Notify background worker
     chrome.runtime.sendMessage({ type: 'VOICE_PROFILE_RESET' });
-  });
-
-  // Import from Twitter
-  elements.importTwitterBtn.addEventListener('click', async () => {
-    let handle = elements.twitterHandleInput.value.trim();
-    if (!handle) {
-      showToast('Enter a Twitter handle', 'error');
-      return;
-    }
-
-    // Clean up handle
-    handle = handle.replace(/^@/, '').replace(/^https?:\/\/(twitter|x)\.com\//, '');
-
-    elements.importTwitterBtn.disabled = true;
-    elements.importTwitterBtn.textContent = 'Importing...';
-
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'IMPORT_TWITTER',
-        handle: handle
-      });
-
-      if (response.error) {
-        showToast(response.error, 'error');
-      } else {
-        state.voiceProfile = response.voiceProfile;
-        await saveState();
-        updateUI();
-        showToast(`Imported ${response.count} tweets!`, 'success');
-        elements.twitterHandleInput.value = '';
-      }
-    } catch (err) {
-      showToast('Import failed. Try again.', 'error');
-    }
-
-    elements.importTwitterBtn.disabled = false;
-    elements.importTwitterBtn.textContent = 'Import';
   });
 
   // Import from URL
