@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perkins</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">P</span>
+        <span class="logo-text">Perkins</span>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span class="status-text">Not configured</span>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="coach">Coach</button>
+      <button class="tab" data-tab="voice">Voice</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- Coach Tab -->
+    <section class="tab-content active" id="coach-tab">
+      <div class="coach-section">
+        <div class="coach-header">
+          <h2>Writing Coach</h2>
+          <label class="toggle">
+            <input type="checkbox" id="coach-enabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="coach-stats">
+          <div class="stat">
+            <span class="stat-value" id="suggestions-count">0</span>
+            <span class="stat-label">Suggestions today</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="accepted-count">0</span>
+            <span class="stat-label">Accepted</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="voice-score">--</span>
+            <span class="stat-label">Voice match</span>
+          </div>
+        </div>
+
+        <div class="recent-suggestions" id="recent-suggestions">
+          <h3>Recent Suggestions</h3>
+          <div class="empty-state">
+            <p>No suggestions yet. Start writing in Google Docs and I'll help you stay on-voice.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Voice Tab -->
+    <section class="tab-content" id="voice-tab">
+      <div class="voice-section">
+        <div class="voice-header">
+          <h2>Your Voice Profile</h2>
+          <span class="voice-status" id="voice-status">Not trained</span>
+        </div>
+
+        <div class="voice-training">
+          <p class="instruction">Paste examples of your best writing to train your voice profile. The more you add, the better I understand your style.</p>
+
+          <textarea
+            id="writing-sample"
+            placeholder="Paste a tweet, email, essay paragraph, or any writing that sounds like YOU..."
+            rows="6"
+          ></textarea>
+
+          <div class="sample-actions">
+            <button class="btn btn-primary" id="add-sample">Add to Voice Profile</button>
+            <span class="sample-count" id="sample-count">0 samples</span>
+          </div>
+        </div>
+
+        <div class="voice-patterns" id="voice-patterns">
+          <h3>Detected Patterns</h3>
+          <div class="empty-state">
+            <p>Add writing samples to see your detected voice patterns.</p>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary btn-danger" id="reset-voice">Reset Voice Profile</button>
+      </div>
+    </section>
+
+    <!-- Settings Tab -->
+    <section class="tab-content" id="settings-tab">
+      <div class="settings-section">
+        <h2>API Configuration</h2>
+        <p class="instruction">Perkins uses your own AI API key to analyze writing. Your key stays on your device.</p>
+
+        <div class="setting-group">
+          <label class="setting-label">AI Provider</label>
+          <div class="radio-group">
+            <label class="radio">
+              <input type="radio" name="provider" value="anthropic" checked>
+              <span class="radio-mark"></span>
+              <span class="radio-text">Claude (Anthropic)</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="provider" value="openai">
+              <span class="radio-mark"></span>
+              <span class="radio-text">GPT-4 (OpenAI)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label" for="api-key">API Key</label>
+          <div class="input-group">
+            <input
+              type="password"
+              id="api-key"
+              placeholder="sk-ant-... or sk-..."
+              autocomplete="off"
+            >
+            <button class="btn-icon" id="toggle-key" title="Show/hide key">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <span class="setting-hint">Your API key is stored locally and never sent to our servers.</span>
+        </div>
+
+        <button class="btn btn-primary" id="save-settings">Save Settings</button>
+
+        <div class="settings-divider"></div>
+
+        <h3>Coaching Preferences</h3>
+
+        <div class="setting-group">
+          <label class="setting-label">Coaching Intensity</label>
+          <select id="intensity">
+            <option value="gentle">Gentle - Only major off-voice moments</option>
+            <option value="balanced" selected>Balanced - Helpful suggestions</option>
+            <option value="strict">Strict - Catch everything</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <label class="checkbox">
+            <input type="checkbox" id="passive-voice" checked>
+            <span class="checkbox-mark"></span>
+            <span class="checkbox-text">Flag passive voice (if not in your style)</span>
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label class="checkbox">
+            <input type="checkbox" id="sentence-length" checked>
+            <span class="checkbox-mark"></span>
+            <span class="checkbox-text">Flag unusual sentence length</span>
+          </label>
+        </div>
+
+        <div class="setting-group">
+          <label class="checkbox">
+            <input type="checkbox" id="word-choice" checked>
+            <span class="checkbox-mark"></span>
+            <span class="checkbox-text">Suggest on-brand word choices</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Perkins v1.0</span>
+      <a href="https://perkins.ai" target="_blank">perkins.ai</a>
+    </footer>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>
