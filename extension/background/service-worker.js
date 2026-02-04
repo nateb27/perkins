@@ -283,6 +283,14 @@ function countWords(text) {
 
 // Learn from a document (passive learning)
 async function learnFromDocument(text, source, title) {
+  // Ensure we have latest state
+  await loadState();
+
+  // Initialize voiceProfile if null
+  if (!voiceProfile) {
+    voiceProfile = { samples: [], summary: null };
+  }
+
   if (!text || text.length < 100) {
     return { error: 'Document is too short to learn from' };
   }
@@ -339,6 +347,14 @@ async function learnFromDocument(text, source, title) {
 
 // Import from URL (fetch and extract article text)
 async function importFromUrl(url) {
+  // Ensure we have latest state (worker may have been idle)
+  await loadState();
+
+  // Initialize voiceProfile if null
+  if (!voiceProfile) {
+    voiceProfile = { samples: [], summary: null };
+  }
+
   if (!url) {
     return { error: 'No URL provided' };
   }
@@ -762,6 +778,14 @@ async function callOpenAI(prompt) {
 
 // Ambient learning - learn from user's active typing
 async function ambientLearn(text, typedCharCount) {
+  // Ensure we have latest state
+  await loadState();
+
+  // Initialize voiceProfile if null
+  if (!voiceProfile) {
+    voiceProfile = { samples: [], summary: null };
+  }
+
   if (!text || text.length < 200) {
     return { error: 'Not enough text to learn from' };
   }
