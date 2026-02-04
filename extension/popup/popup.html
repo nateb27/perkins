@@ -23,6 +23,19 @@
       </div>
     </header>
 
+    <!-- Setup Progress (shown until fully configured) -->
+    <div class="setup-progress" id="setup-progress">
+      <div class="setup-step" id="setup-step-api">
+        <span class="setup-step-icon"></span>
+        <span class="setup-step-text">Add API Key</span>
+      </div>
+      <div class="setup-step-divider"></div>
+      <div class="setup-step" id="setup-step-voice">
+        <span class="setup-step-icon"></span>
+        <span class="setup-step-text">Train Voice</span>
+      </div>
+    </div>
+
     <!-- Navigation Tabs -->
     <nav class="tabs">
       <button class="tab active" data-tab="coach">Coach</button>
@@ -68,12 +81,20 @@
     <!-- Voice Tab -->
     <section class="tab-content" id="voice-tab">
       <div class="voice-section">
+        <!-- Setup Required Overlay -->
+        <div class="setup-required" id="voice-setup-required">
+          <div class="setup-required-icon">🔑</div>
+          <h3>Add your API key first</h3>
+          <p>Perkins needs an AI API key to analyze your writing patterns.</p>
+          <button class="btn btn-primary" id="go-to-settings">Go to Settings</button>
+        </div>
+
         <div class="voice-header">
           <h2>Your Voice Profile</h2>
           <span class="voice-status" id="voice-status">Not trained</span>
         </div>
 
-        <div class="voice-training">
+        <div class="voice-training" id="voice-training">
           <p class="instruction">Paste examples of your best writing to train your voice profile. The more you add, the better I understand your style.</p>
 
           <textarea

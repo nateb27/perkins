@@ -43,7 +43,16 @@ const elements = {
   wordChoiceCheck: document.getElementById('word-choice'),
   checkGrammarCheck: document.getElementById('check-grammar'),
   styleGuideInput: document.getElementById('style-guide'),
-  learnedExceptions: document.getElementById('learned-exceptions')
+  learnedExceptions: document.getElementById('learned-exceptions'),
+
+  // Setup progress
+  setupProgress: document.getElementById('setup-progress'),
+  setupStepApi: document.getElementById('setup-step-api'),
+  setupStepVoice: document.getElementById('setup-step-voice'),
+  voiceSetupRequired: document.getElementById('voice-setup-required'),
+  voiceSection: document.querySelector('.voice-section'),
+  voiceTraining: document.getElementById('voice-training'),
+  goToSettingsBtn: document.getElementById('go-to-settings')
 };
 
 // State
@@ -84,7 +93,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSettings();
   initVoiceTraining();
   initCoach();
+  initSetupFlow();
   updateUI();
+
+  // Default to Settings tab if no API key
+  if (!state.settings.apiKey) {
+    switchToTab('settings');
+  }
 });
 
 // Load state from Chrome storage
@@ -351,8 +366,83 @@ function initCoach() {
   });
 }
 
+// Setup flow initialization
+function initSetupFlow() {
+  // "Go to Settings" button in Voice tab overlay
+  if (elements.goToSettingsBtn) {
+    elements.goToSettingsBtn.addEventListener('click', () => {
+      switchToTab('settings');
+    });
+  }
+
+  // Make setup steps clickable
+  if (elements.setupStepApi) {
+    elements.setupStepApi.addEventListener('click', () => {
+      switchToTab('settings');
+    });
+  }
+
+  if (elements.setupStepVoice) {
+    elements.setupStepVoice.addEventListener('click', () => {
+      // Only allow clicking if API key is set
+      if (state.settings.apiKey) {
+        switchToTab('voice');
+      } else {
+        switchToTab('settings');
+        showToast('Add your API key first', 'info');
+      }
+    });
+  }
+}
+
+// Switch to a specific tab
+function switchToTab(tabName) {
+  const targetTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  if (targetTab) {
+    targetTab.click();
+  }
+}
+
+// Update setup progress bar
+function updateSetupProgress() {
+  const hasApiKey = !!state.settings.apiKey;
+  const hasVoice = state.voiceProfile.samples.length > 0;
+  const isFullySetup = hasApiKey && hasVoice;
+
+  // Show/hide progress bar
+  if (elements.setupProgress) {
+    elements.setupProgress.style.display = isFullySetup ? 'none' : 'flex';
+  }
+
+  // Update API step
+  if (elements.setupStepApi) {
+    elements.setupStepApi.classList.toggle('completed', hasApiKey);
+    elements.setupStepApi.classList.toggle('active', !hasApiKey);
+  }
+
+  // Update Voice step
+  if (elements.setupStepVoice) {
+    elements.setupStepVoice.classList.toggle('completed', hasVoice);
+    elements.setupStepVoice.classList.toggle('active', hasApiKey && !hasVoice);
+    elements.setupStepVoice.classList.toggle('disabled', !hasApiKey);
+  }
+
+  // Show/hide setup required overlay in Voice tab
+  if (elements.voiceSetupRequired) {
+    elements.voiceSetupRequired.style.display = hasApiKey ? 'none' : 'flex';
+  }
+
+  // Add/remove needs-setup class on voice section
+  if (elements.voiceSection) {
+    elements.voiceSection.classList.toggle('needs-setup', !hasApiKey);
+  }
+}
+
 // Update UI based on state
 function updateUI() {
+  // Update setup progress
+  updateSetupProgress();
+
   // Update status indicator
   const isConfigured = state.settings.apiKey && state.voiceProfile.samples.length > 0;
   const isActive = isConfigured && state.coachEnabled;
