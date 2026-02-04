@@ -331,3 +331,376 @@
     right: 10px;
   }
 }
+
+/* Review Document Button */
+.perkins-btn-review {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #1a3a32;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 6px;
+}
+
+.perkins-btn-review:hover {
+  background: #2d5a4a;
+}
+
+.perkins-review-icon {
+  font-size: 14px;
+}
+
+/* ============================================
+   Side-by-Side Review Modal
+   ============================================ */
+
+#perkins-review-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999999;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#perkins-review-modal.perkins-review-visible {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perkins-review-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.perkins-review-container {
+  position: relative;
+  width: 95vw;
+  max-width: 1400px;
+  height: 85vh;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Review Header */
+.perkins-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #1a3a32;
+  color: white;
+}
+
+.perkins-review-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.perkins-review-title .perkins-logo-icon {
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+}
+
+.perkins-review-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.perkins-btn-copy-final {
+  padding: 8px 16px;
+  background: #e07a3d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.perkins-btn-copy-final:hover {
+  background: #c96a32;
+}
+
+.perkins-btn-close-review {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition: background 0.2s;
+}
+
+.perkins-btn-close-review:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Review Summary */
+.perkins-review-summary {
+  padding: 12px 20px;
+  background: #f8f5f0;
+  border-bottom: 1px solid #e8e4de;
+  font-size: 14px;
+}
+
+.perkins-review-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1a3a32;
+}
+
+.perkins-loading-icon {
+  animation: perkins-pulse 1.5s ease-in-out infinite;
+}
+
+.perkins-review-success {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #22c55e;
+}
+
+.perkins-review-error {
+  color: #ef4444;
+}
+
+.perkins-review-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #5a5a5a;
+}
+
+/* Review Body - Side by Side Panels */
+.perkins-review-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.perkins-review-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.perkins-review-original {
+  border-right: 1px solid #e8e4de;
+}
+
+.perkins-review-panel-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #f8f5f0;
+  color: #5a5a5a;
+  border-bottom: 1px solid #e8e4de;
+}
+
+.perkins-review-original .perkins-review-panel-header {
+  color: #991b1b;
+}
+
+.perkins-review-modified .perkins-review-panel-header {
+  color: #166534;
+}
+
+.perkins-review-panel-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #1a1a1a;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Diff Highlighting */
+.perkins-diff-delete {
+  background: #fecaca;
+  color: #991b1b;
+  text-decoration: line-through;
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: help;
+}
+
+.perkins-diff-delete.perkins-diff-accepted {
+  opacity: 0.5;
+}
+
+.perkins-diff-delete.perkins-diff-rejected {
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.5;
+}
+
+.perkins-diff-add {
+  background: #bbf7d0;
+  color: #166534;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.perkins-diff-unchanged {
+  opacity: 0.6;
+}
+
+/* Pending Suggestion in Modified Panel */
+.perkins-diff-suggestion {
+  position: relative;
+  display: inline;
+}
+
+.perkins-diff-text {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 2px 4px;
+  border-radius: 3px;
+  border-bottom: 2px dashed #f59e0b;
+}
+
+.perkins-diff-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.perkins-diff-accept,
+.perkins-diff-reject {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.perkins-diff-accept {
+  background: #22c55e;
+  color: white;
+}
+
+.perkins-diff-accept:hover {
+  background: #16a34a;
+  transform: scale(1.1);
+}
+
+.perkins-diff-reject {
+  background: #ef4444;
+  color: white;
+}
+
+.perkins-diff-reject:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+.perkins-diff-reason {
+  display: block;
+  font-size: 11px;
+  color: #e07a3d;
+  font-style: italic;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+/* Review Footer */
+.perkins-review-footer {
+  padding: 12px 20px;
+  background: #f8f5f0;
+  border-top: 1px solid #e8e4de;
+}
+
+.perkins-review-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.perkins-stat-accepted {
+  color: #22c55e;
+}
+
+.perkins-stat-rejected {
+  color: #ef4444;
+}
+
+.perkins-stat-pending {
+  color: #f59e0b;
+}
+
+/* Scrollbar for review panels */
+.perkins-review-panel-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.perkins-review-panel-content::-webkit-scrollbar-track {
+  background: #f8f5f0;
+}
+
+.perkins-review-panel-content::-webkit-scrollbar-thumb {
+  background: #e8e4de;
+  border-radius: 4px;
+}
+
+.perkins-review-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+
+/* Responsive for review modal */
+@media (max-width: 900px) {
+  .perkins-review-body {
+    flex-direction: column;
+  }
+
+  .perkins-review-original {
+    border-right: none;
+    border-bottom: 1px solid #e8e4de;
+  }
+
+  .perkins-review-panel {
+    max-height: 50%;
+  }
+}

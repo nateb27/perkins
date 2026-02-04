@@ -284,6 +284,10 @@
         </div>
       </div>
       <div class="perkins-panel-footer">
+        <button class="perkins-btn perkins-btn-review" title="Open side-by-side document review">
+          <span class="perkins-review-icon">📖</span>
+          Review Document
+        </button>
         <button class="perkins-btn perkins-btn-learn" title="Add this document to your voice profile">
           <span class="perkins-learn-icon">📝</span>
           Learn from this doc
@@ -296,6 +300,7 @@
     // Event listeners
     panel.querySelector('.perkins-btn-minimize').addEventListener('click', toggleMinimize);
     panel.querySelector('.perkins-btn-close').addEventListener('click', disableCoach);
+    panel.querySelector('.perkins-btn-review').addEventListener('click', openReviewModal);
     panel.querySelector('.perkins-btn-learn').addEventListener('click', learnFromDocument);
 
     // Initially hidden
@@ -498,6 +503,297 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Side-by-side review modal
+  let reviewModal = null;
+  let reviewSuggestions = [];
+  let acceptedSuggestions = new Set();
+  let rejectedSuggestions = new Set();
+
+  function createReviewModal() {
+    if (reviewModal) return;
+
+    reviewModal = document.createElement('div');
+    reviewModal.id = 'perkins-review-modal';
+    reviewModal.innerHTML = `
+      <div class="perkins-review-overlay"></div>
+      <div class="perkins-review-container">
+        <div class="perkins-review-header">
+          <div class="perkins-review-title">
+            <span class="perkins-logo-icon">P</span>
+            <span>Document Review</span>
+          </div>
+          <div class="perkins-review-actions">
+            <button class="perkins-btn perkins-btn-copy-final">Copy Final Version</button>
+            <button class="perkins-btn-close-review" title="Close">×</button>
+          </div>
+        </div>
+        <div class="perkins-review-summary"></div>
+        <div class="perkins-review-body">
+          <div class="perkins-review-panel perkins-review-original">
+            <div class="perkins-review-panel-header">Original</div>
+            <div class="perkins-review-panel-content"></div>
+          </div>
+          <div class="perkins-review-panel perkins-review-modified">
+            <div class="perkins-review-panel-header">Modified</div>
+            <div class="perkins-review-panel-content"></div>
+          </div>
+        </div>
+        <div class="perkins-review-footer">
+          <div class="perkins-review-stats">
+            <span class="perkins-stat-accepted">0 accepted</span>
+            <span class="perkins-stat-rejected">0 rejected</span>
+            <span class="perkins-stat-pending">0 pending</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(reviewModal);
+
+    // Event listeners
+    reviewModal.querySelector('.perkins-review-overlay').addEventListener('click', closeReviewModal);
+    reviewModal.querySelector('.perkins-btn-close-review').addEventListener('click', closeReviewModal);
+    reviewModal.querySelector('.perkins-btn-copy-final').addEventListener('click', copyFinalVersion);
+  }
+
+  async function openReviewModal() {
+    createReviewModal();
+
+    const text = extractDocumentText();
+    if (!text || text.length < 50) {
+      showTemporaryMessage('Document is too short to review.');
+      return;
+    }
+
+    // Show modal with loading state
+    reviewModal.classList.add('perkins-review-visible');
+    reviewModal.querySelector('.perkins-review-summary').innerHTML = `
+      <div class="perkins-review-loading">
+        <span class="perkins-loading-icon">🔍</span>
+        Analyzing your document...
+      </div>
+    `;
+    reviewModal.querySelector('.perkins-review-original .perkins-review-panel-content').textContent = text;
+    reviewModal.querySelector('.perkins-review-modified .perkins-review-panel-content').textContent = text;
+
+    // Reset state
+    reviewSuggestions = [];
+    acceptedSuggestions.clear();
+    rejectedSuggestions.clear();
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'REVIEW_DOCUMENT',
+        text: text
+      });
+
+      if (response.error) {
+        reviewModal.querySelector('.perkins-review-summary').innerHTML = `
+          <div class="perkins-review-error">${escapeHtml(response.error)}</div>
+        `;
+        return;
+      }
+
+      reviewSuggestions = response.suggestions || [];
+      const summary = response.summary || '';
+
+      if (reviewSuggestions.length === 0) {
+        reviewModal.querySelector('.perkins-review-summary').innerHTML = `
+          <div class="perkins-review-success">
+            <span>✨</span> ${escapeHtml(summary || 'Your document looks great! It matches your voice well.')}
+          </div>
+        `;
+      } else {
+        reviewModal.querySelector('.perkins-review-summary').innerHTML = `
+          <div class="perkins-review-info">
+            <span>📝</span> ${reviewSuggestions.length} suggestion${reviewSuggestions.length !== 1 ? 's' : ''} found.
+            ${escapeHtml(summary)}
+          </div>
+        `;
+      }
+
+      renderReviewPanels(text);
+      updateReviewStats();
+
+    } catch (err) {
+      console.error('Review failed:', err);
+      reviewModal.querySelector('.perkins-review-summary').innerHTML = `
+        <div class="perkins-review-error">Review failed. Please try again.</div>
+      `;
+    }
+  }
+
+  function renderReviewPanels(originalText) {
+    const originalPanel = reviewModal.querySelector('.perkins-review-original .perkins-review-panel-content');
+    const modifiedPanel = reviewModal.querySelector('.perkins-review-modified .perkins-review-panel-content');
+
+    // Build original panel with strikethrough highlights
+    let originalHtml = escapeHtml(originalText);
+    let modifiedText = originalText;
+
+    // Sort suggestions by position (reverse order to preserve indices)
+    const sortedSuggestions = reviewSuggestions
+      .map((s, i) => ({ ...s, index: i }))
+      .sort((a, b) => {
+        const posA = originalText.indexOf(a.original);
+        const posB = originalText.indexOf(b.original);
+        return posB - posA; // Reverse order
+      });
+
+    // Apply changes to modified text (from end to start to preserve positions)
+    for (const s of sortedSuggestions) {
+      if (acceptedSuggestions.has(s.index)) {
+        modifiedText = modifiedText.replace(s.original, s.suggestion);
+      }
+    }
+
+    // Build HTML for original panel
+    originalHtml = escapeHtml(originalText);
+    for (const s of reviewSuggestions) {
+      const isAccepted = acceptedSuggestions.has(s.index);
+      const isRejected = rejectedSuggestions.has(s.index);
+      const escapedOriginal = escapeHtml(s.original);
+      const statusClass = isAccepted ? 'accepted' : isRejected ? 'rejected' : 'pending';
+
+      // Replace in original with strikethrough marker
+      const marker = `<span class="perkins-diff-delete perkins-diff-${statusClass}" data-index="${s.index}" title="${escapeHtml(s.reason)}">${escapedOriginal}</span>`;
+      originalHtml = originalHtml.replace(escapedOriginal, marker);
+    }
+
+    // Build HTML for modified panel
+    let modifiedHtml = escapeHtml(originalText);
+    for (const s of reviewSuggestions) {
+      const isAccepted = acceptedSuggestions.has(s.index);
+      const isRejected = rejectedSuggestions.has(s.index);
+      const isPending = !isAccepted && !isRejected;
+      const escapedOriginal = escapeHtml(s.original);
+      const escapedSuggestion = escapeHtml(s.suggestion);
+
+      let replacement;
+      if (isAccepted) {
+        replacement = `<span class="perkins-diff-add perkins-diff-accepted" data-index="${s.index}">${escapedSuggestion}</span>`;
+      } else if (isRejected) {
+        replacement = `<span class="perkins-diff-unchanged" data-index="${s.index}">${escapedOriginal}</span>`;
+      } else {
+        // Pending: show suggestion with accept/reject buttons
+        replacement = `<span class="perkins-diff-suggestion" data-index="${s.index}">
+          <span class="perkins-diff-text">${escapedSuggestion}</span>
+          <span class="perkins-diff-actions">
+            <button class="perkins-diff-accept" data-index="${s.index}" title="Accept">✓</button>
+            <button class="perkins-diff-reject" data-index="${s.index}" title="Reject">✗</button>
+          </span>
+          <span class="perkins-diff-reason">${escapeHtml(s.reason)}</span>
+        </span>`;
+      }
+
+      modifiedHtml = modifiedHtml.replace(escapedOriginal, replacement);
+    }
+
+    originalPanel.innerHTML = originalHtml;
+    modifiedPanel.innerHTML = modifiedHtml;
+
+    // Bind accept/reject buttons
+    modifiedPanel.querySelectorAll('.perkins-diff-accept').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.index);
+        acceptSuggestion(idx);
+      });
+    });
+
+    modifiedPanel.querySelectorAll('.perkins-diff-reject').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.index);
+        rejectSuggestion(idx);
+      });
+    });
+
+    // Sync scroll between panels
+    originalPanel.addEventListener('scroll', () => {
+      modifiedPanel.scrollTop = originalPanel.scrollTop;
+    });
+    modifiedPanel.addEventListener('scroll', () => {
+      originalPanel.scrollTop = modifiedPanel.scrollTop;
+    });
+  }
+
+  function acceptSuggestion(index) {
+    acceptedSuggestions.add(index);
+    rejectedSuggestions.delete(index);
+
+    // Send feedback
+    const suggestion = reviewSuggestions[index];
+    if (suggestion) {
+      chrome.runtime.sendMessage({
+        type: 'SUGGESTION_FEEDBACK',
+        suggestion,
+        accepted: true
+      });
+    }
+
+    renderReviewPanels(extractDocumentText());
+    updateReviewStats();
+  }
+
+  function rejectSuggestion(index) {
+    rejectedSuggestions.add(index);
+    acceptedSuggestions.delete(index);
+
+    // Send feedback
+    const suggestion = reviewSuggestions[index];
+    if (suggestion) {
+      chrome.runtime.sendMessage({
+        type: 'SUGGESTION_FEEDBACK',
+        suggestion,
+        accepted: false
+      });
+    }
+
+    renderReviewPanels(extractDocumentText());
+    updateReviewStats();
+  }
+
+  function updateReviewStats() {
+    const accepted = acceptedSuggestions.size;
+    const rejected = rejectedSuggestions.size;
+    const pending = reviewSuggestions.length - accepted - rejected;
+
+    reviewModal.querySelector('.perkins-stat-accepted').textContent = `${accepted} accepted`;
+    reviewModal.querySelector('.perkins-stat-rejected').textContent = `${rejected} rejected`;
+    reviewModal.querySelector('.perkins-stat-pending').textContent = `${pending} pending`;
+  }
+
+  function copyFinalVersion() {
+    let finalText = extractDocumentText();
+
+    // Apply accepted changes (sort by position, reverse order)
+    const sortedAccepted = reviewSuggestions
+      .filter((s, i) => acceptedSuggestions.has(i))
+      .sort((a, b) => {
+        const posA = finalText.indexOf(a.original);
+        const posB = finalText.indexOf(b.original);
+        return posB - posA;
+      });
+
+    for (const s of sortedAccepted) {
+      finalText = finalText.replace(s.original, s.suggestion);
+    }
+
+    navigator.clipboard.writeText(finalText).then(() => {
+      showTemporaryMessage('Final version copied to clipboard!');
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      showTemporaryMessage('Failed to copy. Try again.');
+    });
+  }
+
+  function closeReviewModal() {
+    if (reviewModal) {
+      reviewModal.classList.remove('perkins-review-visible');
+    }
   }
 
 })();

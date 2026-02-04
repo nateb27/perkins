@@ -132,6 +132,9 @@ async function handleMessage(message, sender) {
     case 'IMPORT_URL':
       return await importFromUrl(message.url);
 
+    case 'REVIEW_DOCUMENT':
+      return await reviewDocument(message.text);
+
     default:
       return { error: 'Unknown message type' };
   }
@@ -653,6 +656,114 @@ async function callOpenAI(prompt) {
 
   const data = await response.json();
   return data.choices[0].message.content;
+}
+
+// Full document review for side-by-side view
+async function reviewDocument(text) {
+  if (!settings?.apiKey) {
+    return { error: 'No API key configured' };
+  }
+
+  if (!voiceProfile?.summary) {
+    return { error: 'No voice profile configured. Add writing samples first.' };
+  }
+
+  if (!text || text.trim().length < 50) {
+    return { error: 'Document is too short to review' };
+  }
+
+  // Rate limiting check
+  if (!rateLimiter.canMakeCall()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
+    return { error: `Rate limited. Please wait ${waitTime} seconds.`, rateLimited: true };
+  }
+  rateLimiter.recordCall();
+
+  // Build style guide section
+  const styleGuideSection = settings.styleGuide
+    ? `\nCOMPANY STYLE GUIDE:\n${settings.styleGuide}\n`
+    : '';
+
+  // Build learned exceptions section
+  const exceptionsSection = learnedExceptions.length > 0
+    ? `\nLEARNED EXCEPTIONS (patterns the user has confirmed are intentional - DO NOT flag these):\n${learnedExceptions.map(e => `- "${e.pattern}"`).join('\n')}\n`
+    : '';
+
+  const grammarInstruction = settings.checks?.grammar
+    ? `Also check for likely typos and grammar mistakes. Only flag genuine mistakes, not intentional style choices.`
+    : 'Do NOT flag grammar or spelling - focus only on voice.';
+
+  const prompt = `You are a personalized writing coach doing a full document review. Analyze this text and suggest edits to match the writer's voice.
+
+VOICE PROFILE:
+${voiceProfile.summary}
+
+SAMPLE WRITINGS (this is how they naturally write):
+${voiceProfile.samples.slice(0, 3).map(s => `"${s.text.substring(0, 200)}..."`).join('\n')}
+${styleGuideSection}${exceptionsSection}
+${grammarInstruction}
+
+DOCUMENT TO REVIEW:
+"""
+${text}
+"""
+
+Analyze this document and provide suggestions for each phrase or sentence that doesn't match the writer's voice. For each issue:
+1. Include the EXACT original text (verbatim, character-for-character match)
+2. Provide a revised version that matches their voice
+3. Brief reason
+
+Respond in this exact JSON format:
+{
+  "suggestions": [
+    {
+      "original": "exact text from document",
+      "suggestion": "revised version",
+      "reason": "brief explanation"
+    }
+  ],
+  "summary": "one sentence overall assessment"
+}
+
+RULES:
+- Maximum 10 suggestions
+- Original text MUST be an exact substring from the document
+- Focus on the most impactful changes
+- If document already matches their voice well, return fewer suggestions
+- Return {"suggestions": [], "summary": "..."} if no changes needed`;
+
+  try {
+    const response = await callAI(prompt);
+
+    let result;
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        result = JSON.parse(jsonMatch[0]);
+      } else {
+        result = { suggestions: [], summary: 'Could not parse response' };
+      }
+    } catch (parseErr) {
+      console.error('Failed to parse review response:', parseErr);
+      result = { suggestions: [], summary: 'Could not parse response' };
+    }
+
+    // Filter out learned exceptions
+    if (result.suggestions && learnedExceptions.length > 0) {
+      result.suggestions = result.suggestions.filter(s => {
+        const original = s.original.toLowerCase().trim();
+        return !learnedExceptions.some(e =>
+          original.includes(e.pattern.toLowerCase()) ||
+          e.pattern.toLowerCase().includes(original)
+        );
+      });
+    }
+
+    return result;
+  } catch (err) {
+    console.error('Document review failed:', err);
+    return { error: err.message };
+  }
 }
 
 // Handle feedback (accept/reject suggestions)
