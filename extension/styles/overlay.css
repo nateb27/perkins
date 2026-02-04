@@ -1460,3 +1460,274 @@
 .perkins-detection-high .perkins-detection-icon {
   animation: detectionPulse 2s ease-in-out infinite;
 }
+
+/* ========================================
+   Polish: Animations & Transitions
+   ======================================== */
+
+/* Smooth panel entrance animation */
+@keyframes perkinsSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#perkins-panel:not(.perkins-hidden) {
+  animation: perkinsSlideIn 0.3s ease-out;
+}
+
+/* Suggestion card entrance animation */
+@keyframes suggestionSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.perkins-suggestion {
+  animation: suggestionSlideIn 0.25s ease-out;
+  animation-fill-mode: both;
+}
+
+.perkins-suggestion:nth-child(1) { animation-delay: 0s; }
+.perkins-suggestion:nth-child(2) { animation-delay: 0.05s; }
+.perkins-suggestion:nth-child(3) { animation-delay: 0.1s; }
+.perkins-suggestion:nth-child(4) { animation-delay: 0.15s; }
+.perkins-suggestion:nth-child(5) { animation-delay: 0.2s; }
+
+/* Pulse animation for new suggestions */
+@keyframes newSuggestionPulse {
+  0% { box-shadow: 0 1px 8px rgba(224, 122, 61, 0); }
+  50% { box-shadow: 0 1px 8px rgba(224, 122, 61, 0.4); }
+  100% { box-shadow: 0 1px 8px rgba(224, 122, 61, 0); }
+}
+
+.perkins-suggestion.perkins-new {
+  animation: newSuggestionPulse 1.5s ease-in-out;
+}
+
+/* Button hover effects */
+.perkins-btn {
+  transition: all 0.2s ease;
+}
+
+.perkins-btn:hover {
+  transform: translateY(-1px);
+}
+
+.perkins-btn:active {
+  transform: translateY(0);
+}
+
+/* ========================================
+   Polish: Loading States
+   ======================================== */
+
+.perkins-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  text-align: center;
+}
+
+.perkins-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #eaeaea;
+  border-top-color: #e07a3d;
+  border-radius: 50%;
+  animation: perkinsSpin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes perkinsSpin {
+  to { transform: rotate(360deg); }
+}
+
+.perkins-loading-text {
+  color: #666;
+  font-size: 13px;
+}
+
+.perkins-loading-subtext {
+  color: #999;
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+/* ========================================
+   Polish: Error States
+   ======================================== */
+
+.perkins-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px;
+  text-align: center;
+}
+
+.perkins-error-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.perkins-error-message {
+  color: #991b1b;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.perkins-error-retry {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.perkins-error-retry:hover {
+  background: #b91c1c;
+}
+
+/* Rate limit warning */
+.perkins-rate-limit {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px;
+  text-align: center;
+}
+
+.perkins-rate-limit-icon {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+
+.perkins-rate-limit-text {
+  color: #92400e;
+  font-size: 12px;
+}
+
+/* ========================================
+   Polish: Keyboard Shortcut Hint
+   ======================================== */
+
+.perkins-shortcut-hint {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 999998;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.perkins-shortcut-hint.perkins-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.perkins-shortcut-hint kbd {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  margin: 0 2px;
+}
+
+/* ========================================
+   Polish: Empty State
+   ======================================== */
+
+.perkins-empty-state {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.perkins-empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.8;
+}
+
+.perkins-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+
+.perkins-empty-text {
+  font-size: 12px;
+  color: #666;
+}
+
+/* ========================================
+   Polish: Status Indicator
+   ======================================== */
+
+.perkins-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  margin-right: 6px;
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+.perkins-status-dot.perkins-analyzing {
+  background: #f59e0b;
+}
+
+.perkins-status-dot.perkins-error {
+  background: #ef4444;
+  animation: none;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ========================================
+   Polish: Success Feedback
+   ======================================== */
+
+@keyframes successPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.perkins-success {
+  animation: successPop 0.3s ease-out;
+}
+
+.perkins-checkmark {
+  color: #22c55e;
+  font-size: 18px;
+}

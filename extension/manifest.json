@@ -41,6 +41,12 @@
       "js": ["content/google-docs.js"],
       "css": ["styles/overlay.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content/gmail.js"],
+      "css": ["styles/overlay.css"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

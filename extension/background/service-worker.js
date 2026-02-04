@@ -35,6 +35,60 @@ const rateLimiter = {
   }
 };
 
+// Analysis cache - avoid re-analyzing identical text
+const analysisCache = {
+  entries: new Map(),
+  maxSize: 20,
+  ttlMs: 300000, // 5 minutes
+
+  // Simple hash function for cache key
+  hash(text) {
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString();
+  },
+
+  get(text) {
+    const key = this.hash(text);
+    const entry = this.entries.get(key);
+
+    if (entry && Date.now() - entry.timestamp < this.ttlMs) {
+      console.log('Perkins: Cache hit for analysis');
+      return entry.result;
+    }
+
+    // Clean up expired entry
+    if (entry) {
+      this.entries.delete(key);
+    }
+
+    return null;
+  },
+
+  set(text, result) {
+    const key = this.hash(text);
+
+    // Evict oldest entries if at max size
+    if (this.entries.size >= this.maxSize) {
+      const oldestKey = this.entries.keys().next().value;
+      this.entries.delete(oldestKey);
+    }
+
+    this.entries.set(key, {
+      result,
+      timestamp: Date.now()
+    });
+  },
+
+  clear() {
+    this.entries.clear();
+  }
+};
+
 // Initialize on install/startup
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('Perkins installed');
@@ -207,6 +261,9 @@ Respond with ONLY the voice profile as a series of short observations separated 
 
     // Save to storage
     await chrome.storage.local.set({ voiceProfile });
+
+    // Invalidate analysis cache since voice profile changed
+    analysisCache.clear();
 
     return { summary };
   } catch (err) {
@@ -429,6 +486,13 @@ async function analyzeText(text, context = {}) {
     return { suggestions: [] };
   }
 
+  // Check cache first (before rate limiting)
+  const normalizedText = text.trim();
+  const cachedResult = analysisCache.get(normalizedText);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
   // Rate limiting check
   if (!rateLimiter.canMakeCall()) {
     const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
@@ -583,6 +647,9 @@ CRITICAL RULES:
         genericIndicators: []
       };
     }
+
+    // Cache successful result
+    analysisCache.set(normalizedText, result);
 
     return result;
   } catch (err) {

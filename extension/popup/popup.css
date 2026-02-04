@@ -1096,3 +1096,195 @@ select:focus {
 .badge-item.new {
   animation: badgeEarned 0.5s ease-out;
 }
+
+/* ============================================
+   Tutorial / Onboarding Modal
+   ============================================ */
+
+#tutorial-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: tutorialFadeIn 0.3s ease-out;
+}
+
+@keyframes tutorialFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+#tutorial-overlay.tutorial-closing {
+  animation: tutorialFadeOut 0.3s ease-out forwards;
+}
+
+@keyframes tutorialFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.tutorial-modal {
+  background: white;
+  border-radius: 16px;
+  width: 320px;
+  max-width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: tutorialSlideUp 0.3s ease-out;
+}
+
+@keyframes tutorialSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tutorial-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.tutorial-progress {
+  display: flex;
+  gap: 6px;
+}
+
+.tutorial-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.tutorial-dot.active {
+  background: #1a3a32;
+  transform: scale(1.2);
+}
+
+.tutorial-skip {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.2s;
+}
+
+.tutorial-skip:hover {
+  color: #333;
+}
+
+.tutorial-content {
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.tutorial-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  animation: tutorialIconBounce 0.5s ease-out;
+}
+
+@keyframes tutorialIconBounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.tutorial-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 12px;
+}
+
+.tutorial-text {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.tutorial-text strong {
+  color: #1a3a32;
+}
+
+.tutorial-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+  background: #fafafa;
+}
+
+.tutorial-prev,
+.tutorial-next {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tutorial-prev {
+  background: white;
+  border: 1px solid #ddd;
+  color: #666;
+}
+
+.tutorial-prev:hover:not(:disabled) {
+  border-color: #999;
+  color: #333;
+}
+
+.tutorial-prev:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tutorial-next {
+  background: #1a3a32;
+  border: none;
+  color: white;
+}
+
+.tutorial-next:hover {
+  background: #0d1f1a;
+}
+
+/* Tab highlight during tutorial */
+.tab.tutorial-highlight {
+  animation: tabPulse 1s ease-in-out infinite;
+  position: relative;
+}
+
+.tab.tutorial-highlight::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 2px solid #e07a3d;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+@keyframes tabPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 122, 61, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(224, 122, 61, 0); }
+}

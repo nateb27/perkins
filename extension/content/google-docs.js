@@ -59,8 +59,38 @@
     // Listen for messages from background/popup
     chrome.runtime.onMessage.addListener(handleMessage);
 
+    // Keyboard shortcut: Cmd/Ctrl+Shift+P to toggle panel
+    document.addEventListener('keydown', handleKeyboardShortcut);
+
     // Create coaching panel
     createCoachingPanel();
+  }
+
+  // Handle keyboard shortcuts
+  function handleKeyboardShortcut(e) {
+    // Cmd/Ctrl + Shift + P to toggle panel
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePanel();
+    }
+  }
+
+  // Toggle panel visibility
+  function togglePanel() {
+    if (!panel) return;
+
+    if (panel.classList.contains('perkins-hidden')) {
+      showPanel();
+      if (!isEnabled) {
+        // Enable coaching when opening panel
+        isEnabled = true;
+        startMonitoring();
+        chrome.runtime.sendMessage({ type: 'COACH_TOGGLE', enabled: true });
+      }
+    } else {
+      hidePanel();
+    }
   }
 
   function handleMessage(message, sender, sendResponse) {
@@ -392,6 +422,9 @@
 
     document.body.appendChild(panel);
 
+    // Create keyboard shortcut hint
+    createShortcutHint();
+
     // Event listeners
     panel.querySelector('.perkins-btn-minimize').addEventListener('click', toggleMinimize);
     panel.querySelector('.perkins-btn-close').addEventListener('click', disableCoach);
@@ -402,6 +435,27 @@
 
     // Initially hidden
     panel.classList.add('perkins-hidden');
+  }
+
+  // Create keyboard shortcut hint element
+  function createShortcutHint() {
+    const hint = document.createElement('div');
+    hint.className = 'perkins-shortcut-hint';
+    hint.innerHTML = `Press <kbd>${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> to toggle Perkins`;
+    document.body.appendChild(hint);
+
+    // Show hint briefly on first visit
+    chrome.storage.local.get(['perkinsShortcutShown'], (result) => {
+      if (!result.perkinsShortcutShown) {
+        setTimeout(() => {
+          hint.classList.add('perkins-visible');
+          setTimeout(() => {
+            hint.classList.remove('perkins-visible');
+            chrome.storage.local.set({ perkinsShortcutShown: true });
+          }, 4000);
+        }, 2000);
+      }
+    });
   }
 
   async function learnFromDocument() {
@@ -469,23 +523,45 @@
     const content = panel?.querySelector('.perkins-panel-content');
     if (content) {
       content.innerHTML = `
-        <div class="perkins-panel-status perkins-loading">
-          <span class="perkins-status-icon">🔍</span>
-          <span class="perkins-status-text">Analyzing your writing...</span>
+        <div class="perkins-loading">
+          <div class="perkins-spinner"></div>
+          <div class="perkins-loading-text">Analyzing your writing...</div>
+          <div class="perkins-loading-subtext">Looking for off-voice moments</div>
         </div>
       `;
     }
   }
 
-  function showPanelError(message) {
+  function showPanelError(message, retryable = true) {
     const content = panel?.querySelector('.perkins-panel-content');
     if (content) {
-      content.innerHTML = `
-        <div class="perkins-panel-status perkins-error">
-          <span class="perkins-status-icon">⚠️</span>
-          <span class="perkins-status-text">${escapeHtml(message)}</span>
-        </div>
-      `;
+      const isRateLimit = message.toLowerCase().includes('rate limit') || message.toLowerCase().includes('wait');
+
+      if (isRateLimit) {
+        content.innerHTML = `
+          <div class="perkins-rate-limit">
+            <div class="perkins-rate-limit-icon">⏱️</div>
+            <div class="perkins-rate-limit-text">${escapeHtml(message)}</div>
+          </div>
+        `;
+      } else {
+        content.innerHTML = `
+          <div class="perkins-error">
+            <div class="perkins-error-icon">⚠️</div>
+            <div class="perkins-error-message">${escapeHtml(message)}</div>
+            ${retryable ? '<button class="perkins-error-retry">Try Again</button>' : ''}
+          </div>
+        `;
+
+        // Bind retry button
+        const retryBtn = content.querySelector('.perkins-error-retry');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => {
+            lastAnalyzedText = ''; // Reset to force re-analysis
+            scheduleAnalysis();
+          });
+        }
+      }
     }
   }
 

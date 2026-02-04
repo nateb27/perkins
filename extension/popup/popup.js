@@ -142,6 +142,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!state.settings.apiKey) {
     switchToTab('settings');
   }
+
+  // Check for first-run tutorial
+  checkFirstRunTutorial();
 });
 
 // Load state from Chrome storage
@@ -913,3 +916,155 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
   }
 });
+
+// ============================================
+// Tutorial / Onboarding
+// ============================================
+
+async function checkFirstRunTutorial() {
+  const { perkinsOnboardingComplete } = await chrome.storage.local.get(['perkinsOnboardingComplete']);
+
+  if (!perkinsOnboardingComplete) {
+    showTutorial();
+  }
+}
+
+function showTutorial() {
+  const tutorialSteps = [
+    {
+      title: 'Welcome to Perkins!',
+      content: 'Your personal writing voice coach. Perkins learns how YOU write and helps you stay consistent.',
+      icon: '👋',
+      highlight: null
+    },
+    {
+      title: 'Step 1: Add Your API Key',
+      content: 'First, add your Anthropic or OpenAI API key. Your key is encrypted and stored locally - we never see it.',
+      icon: '🔑',
+      highlight: 'settings'
+    },
+    {
+      title: 'Step 2: Train Your Voice',
+      content: 'Add writing samples so Perkins can learn YOUR voice. Paste text, import from URLs, or let it learn as you write.',
+      icon: '✍️',
+      highlight: 'voice'
+    },
+    {
+      title: 'Step 3: Start Coaching',
+      content: 'Toggle on the coach and write in Google Docs or Gmail. Perkins will watch for moments that don\'t sound like you.',
+      icon: '👀',
+      highlight: 'coach'
+    },
+    {
+      title: 'Pro Features',
+      content: '<strong>Chat</strong> - Discuss your writing with Perkins<br><strong>Write Like Me</strong> - Generate content in your voice<br><strong>Review</strong> - Full document analysis',
+      icon: '✨',
+      highlight: null
+    },
+    {
+      title: 'You\'re Ready!',
+      content: 'Perkins gets smarter the more you use it. Your voice profile improves with every document you analyze.',
+      icon: '🚀',
+      highlight: null
+    }
+  ];
+
+  let currentStep = 0;
+
+  // Create modal overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'tutorial-overlay';
+  overlay.innerHTML = `
+    <div class="tutorial-modal">
+      <div class="tutorial-header">
+        <div class="tutorial-progress">
+          ${tutorialSteps.map((_, i) => `<div class="tutorial-dot ${i === 0 ? 'active' : ''}"></div>`).join('')}
+        </div>
+        <button class="tutorial-skip">Skip</button>
+      </div>
+      <div class="tutorial-content">
+        <div class="tutorial-icon">${tutorialSteps[0].icon}</div>
+        <h3 class="tutorial-title">${tutorialSteps[0].title}</h3>
+        <p class="tutorial-text">${tutorialSteps[0].content}</p>
+      </div>
+      <div class="tutorial-footer">
+        <button class="tutorial-prev" disabled>← Back</button>
+        <button class="tutorial-next">Next →</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const modal = overlay.querySelector('.tutorial-modal');
+  const icon = overlay.querySelector('.tutorial-icon');
+  const title = overlay.querySelector('.tutorial-title');
+  const text = overlay.querySelector('.tutorial-text');
+  const dots = overlay.querySelectorAll('.tutorial-dot');
+  const prevBtn = overlay.querySelector('.tutorial-prev');
+  const nextBtn = overlay.querySelector('.tutorial-next');
+  const skipBtn = overlay.querySelector('.tutorial-skip');
+
+  function updateStep() {
+    const step = tutorialSteps[currentStep];
+    icon.textContent = step.icon;
+    title.textContent = step.title;
+    text.innerHTML = step.content;
+
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === currentStep);
+    });
+
+    prevBtn.disabled = currentStep === 0;
+    nextBtn.textContent = currentStep === tutorialSteps.length - 1 ? 'Get Started' : 'Next →';
+
+    // Highlight relevant tab
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('tutorial-highlight'));
+    if (step.highlight) {
+      const tabToHighlight = document.querySelector(`.tab[data-tab="${step.highlight}"]`);
+      if (tabToHighlight) {
+        tabToHighlight.classList.add('tutorial-highlight');
+      }
+    }
+  }
+
+  function closeTutorial() {
+    overlay.classList.add('tutorial-closing');
+    setTimeout(() => overlay.remove(), 300);
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('tutorial-highlight'));
+    chrome.storage.local.set({ perkinsOnboardingComplete: true });
+  }
+
+  prevBtn.addEventListener('click', () => {
+    if (currentStep > 0) {
+      currentStep--;
+      updateStep();
+    }
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentStep < tutorialSteps.length - 1) {
+      currentStep++;
+      updateStep();
+    } else {
+      closeTutorial();
+    }
+  });
+
+  skipBtn.addEventListener('click', closeTutorial);
+
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      closeTutorial();
+    }
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', function escHandler(e) {
+    if (e.key === 'Escape') {
+      closeTutorial();
+      document.removeEventListener('keydown', escHandler);
+    }
+  });
+}
