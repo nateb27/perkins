@@ -525,7 +525,8 @@
             <span>Document Review</span>
           </div>
           <div class="perkins-review-actions">
-            <button class="perkins-btn perkins-btn-copy-final">Copy Final Version</button>
+            <button class="perkins-btn perkins-btn-apply" title="Apply changes using Find & Replace">Apply to Document</button>
+            <button class="perkins-btn perkins-btn-copy-final" title="Copy edited text to clipboard">Copy Text</button>
             <button class="perkins-btn-close-review" title="Close">×</button>
           </div>
         </div>
@@ -555,6 +556,7 @@
     // Event listeners
     reviewModal.querySelector('.perkins-review-overlay').addEventListener('click', closeReviewModal);
     reviewModal.querySelector('.perkins-btn-close-review').addEventListener('click', closeReviewModal);
+    reviewModal.querySelector('.perkins-btn-apply').addEventListener('click', applyToDocument);
     reviewModal.querySelector('.perkins-btn-copy-final').addEventListener('click', copyFinalVersion);
   }
 
@@ -788,6 +790,236 @@
       console.error('Failed to copy:', err);
       showTemporaryMessage('Failed to copy. Try again.');
     });
+  }
+
+  // Apply changes to document using Find & Replace
+  async function applyToDocument() {
+    const changes = reviewSuggestions
+      .map((s, i) => ({ ...s, index: i }))
+      .filter(s => acceptedSuggestions.has(s.index));
+
+    if (changes.length === 0) {
+      showTemporaryMessage('No changes to apply. Accept some suggestions first.');
+      return;
+    }
+
+    // Close modal and show progress overlay
+    closeReviewModal();
+    showApplyProgress(changes);
+  }
+
+  let applyOverlay = null;
+
+  function showApplyProgress(changes) {
+    // Create overlay for applying changes
+    if (!applyOverlay) {
+      applyOverlay = document.createElement('div');
+      applyOverlay.id = 'perkins-apply-overlay';
+      document.body.appendChild(applyOverlay);
+    }
+
+    applyOverlay.innerHTML = `
+      <div class="perkins-apply-container">
+        <div class="perkins-apply-header">
+          <span class="perkins-logo-icon">P</span>
+          <span>Applying Changes</span>
+        </div>
+        <div class="perkins-apply-content">
+          <p class="perkins-apply-instruction">
+            Click each "Apply" button to make the change using Find & Replace.
+            <br><small>This preserves your document's formatting.</small>
+          </p>
+          <div class="perkins-apply-list"></div>
+          <div class="perkins-apply-actions">
+            <button class="perkins-btn perkins-btn-done">Done</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const listContainer = applyOverlay.querySelector('.perkins-apply-list');
+
+    // Render each change with an apply button
+    changes.forEach((change, i) => {
+      const item = document.createElement('div');
+      item.className = 'perkins-apply-item';
+      item.dataset.index = i;
+      item.innerHTML = `
+        <div class="perkins-apply-item-text">
+          <span class="perkins-apply-find">"${escapeHtml(truncateText(change.original, 40))}"</span>
+          <span class="perkins-apply-arrow">→</span>
+          <span class="perkins-apply-replace">"${escapeHtml(truncateText(change.suggestion, 40))}"</span>
+        </div>
+        <div class="perkins-apply-item-actions">
+          <button class="perkins-btn perkins-btn-apply-one" data-index="${i}">Apply</button>
+          <span class="perkins-apply-status"></span>
+        </div>
+      `;
+      listContainer.appendChild(item);
+    });
+
+    // Bind apply buttons
+    listContainer.querySelectorAll('.perkins-btn-apply-one').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const idx = parseInt(btn.dataset.index);
+        const change = changes[idx];
+        const item = btn.closest('.perkins-apply-item');
+        const status = item.querySelector('.perkins-apply-status');
+
+        btn.disabled = true;
+        btn.textContent = 'Applying...';
+
+        const success = await applyChangeWithFindReplace(change.original, change.suggestion);
+
+        if (success) {
+          btn.textContent = 'Done';
+          btn.classList.add('perkins-btn-success');
+          status.textContent = '✓';
+          status.classList.add('success');
+          item.classList.add('applied');
+        } else {
+          btn.textContent = 'Manual';
+          btn.classList.add('perkins-btn-manual');
+          status.textContent = 'Use Ctrl+H';
+          status.classList.add('manual');
+
+          // Copy find text to clipboard for manual use
+          await navigator.clipboard.writeText(change.original);
+          showTemporaryMessage('Original text copied. Press Ctrl+H to Find & Replace.');
+        }
+      });
+    });
+
+    // Done button
+    applyOverlay.querySelector('.perkins-btn-done').addEventListener('click', () => {
+      hideApplyOverlay();
+    });
+
+    applyOverlay.classList.add('perkins-apply-visible');
+  }
+
+  function hideApplyOverlay() {
+    if (applyOverlay) {
+      applyOverlay.classList.remove('perkins-apply-visible');
+    }
+  }
+
+  function truncateText(text, maxLen) {
+    if (text.length <= maxLen) return text;
+    return text.substring(0, maxLen - 3) + '...';
+  }
+
+  // Attempt to automate Find & Replace in Google Docs
+  async function applyChangeWithFindReplace(findText, replaceText) {
+    try {
+      // Focus the editor first
+      const editor = document.querySelector('.kix-appview-editor');
+      if (editor) {
+        editor.click();
+      }
+
+      await delay(100);
+
+      // Try to open Find & Replace with Ctrl+H
+      const keyEvent = new KeyboardEvent('keydown', {
+        key: 'h',
+        code: 'KeyH',
+        keyCode: 72,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(keyEvent);
+
+      // Wait for dialog to appear
+      await delay(500);
+
+      // Google Docs Find & Replace dialog
+      const dialog = document.querySelector('.docs-findandreplacedialog');
+      if (!dialog) {
+        console.log('Perkins: Find & Replace dialog not found, trying menu');
+        // Try via Edit menu as fallback
+        return await tryMenuFindReplace(findText, replaceText);
+      }
+
+      // Find the input fields - Google Docs uses specific structure
+      const inputs = dialog.querySelectorAll('input[type="text"]');
+      if (inputs.length < 2) {
+        console.log('Perkins: Could not find input fields');
+        return false;
+      }
+
+      const findInput = inputs[0];
+      const replaceInput = inputs[1];
+
+      // Clear and set find text
+      findInput.focus();
+      findInput.value = findText;
+      findInput.dispatchEvent(new Event('input', { bubbles: true }));
+      findInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      await delay(100);
+
+      // Set replace text
+      replaceInput.focus();
+      replaceInput.value = replaceText;
+      replaceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      replaceInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      await delay(100);
+
+      // Find and click the Replace All or Replace button
+      const buttons = dialog.querySelectorAll('button');
+      let replaceBtn = null;
+
+      for (const btn of buttons) {
+        const text = btn.textContent.toLowerCase();
+        if (text.includes('replace all')) {
+          replaceBtn = btn;
+          break;
+        } else if (text.includes('replace') && !text.includes('find')) {
+          replaceBtn = btn;
+        }
+      }
+
+      if (replaceBtn && !replaceBtn.disabled) {
+        replaceBtn.click();
+        await delay(300);
+
+        // Close the dialog
+        const closeBtn = dialog.querySelector('button[aria-label="Close"]') ||
+                         dialog.querySelector('.docs-dialog-close');
+        if (closeBtn) {
+          closeBtn.click();
+        } else {
+          // Try Escape key
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Escape',
+            code: 'Escape',
+            keyCode: 27,
+            bubbles: true
+          }));
+        }
+
+        return true;
+      }
+
+      return false;
+    } catch (err) {
+      console.error('Perkins: Find & Replace automation failed:', err);
+      return false;
+    }
+  }
+
+  // Fallback: try to access Find & Replace via menu
+  async function tryMenuFindReplace(findText, replaceText) {
+    // This is a fallback that's less reliable
+    // For now, return false to trigger manual mode
+    return false;
+  }
+
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   function closeReviewModal() {

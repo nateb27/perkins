@@ -704,3 +704,197 @@
     max-height: 50%;
   }
 }
+
+/* ============================================
+   Apply Changes Overlay
+   ============================================ */
+
+#perkins-apply-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999998;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#perkins-apply-overlay.perkins-apply-visible {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 20px;
+}
+
+.perkins-apply-container {
+  width: 400px;
+  max-height: calc(100vh - 40px);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.perkins-apply-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #1a3a32;
+  color: white;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+}
+
+.perkins-apply-content {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.perkins-apply-instruction {
+  font-size: 13px;
+  color: #5a5a5a;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.perkins-apply-instruction small {
+  color: #888;
+}
+
+.perkins-apply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.perkins-apply-item {
+  background: #f8f5f0;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s;
+}
+
+.perkins-apply-item.applied {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.perkins-apply-item-text {
+  font-size: 12px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.perkins-apply-find {
+  color: #991b1b;
+  text-decoration: line-through;
+}
+
+.perkins-apply-arrow {
+  color: #5a5a5a;
+  margin: 0 6px;
+}
+
+.perkins-apply-replace {
+  color: #166534;
+}
+
+.perkins-apply-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.perkins-btn-apply-one {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #1a3a32;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.perkins-btn-apply-one:hover:not(:disabled) {
+  background: #2d5a4a;
+}
+
+.perkins-btn-apply-one:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.perkins-btn-apply-one.perkins-btn-success {
+  background: #22c55e;
+}
+
+.perkins-btn-apply-one.perkins-btn-manual {
+  background: #f59e0b;
+}
+
+.perkins-apply-status {
+  font-size: 12px;
+  color: #5a5a5a;
+}
+
+.perkins-apply-status.success {
+  color: #22c55e;
+}
+
+.perkins-apply-status.manual {
+  color: #f59e0b;
+}
+
+.perkins-apply-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.perkins-btn-done {
+  padding: 8px 20px;
+  font-size: 13px;
+  background: #e8e4de;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.perkins-btn-done:hover {
+  background: #d4cfc7;
+}
+
+/* Review header button adjustments */
+.perkins-btn-apply {
+  padding: 8px 16px;
+  background: #e07a3d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.perkins-btn-apply:hover {
+  background: #c96a32;
+}
+
+.perkins-review-actions .perkins-btn-copy-final {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.perkins-review-actions .perkins-btn-copy-final:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
