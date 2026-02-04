@@ -1,0 +1,291 @@
+/**
+ * Perkins Coaching Panel Styles
+ * Injected into Google Docs pages
+ */
+
+/* Panel Container */
+#perkins-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 320px;
+  max-height: 400px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1a1a1a;
+  z-index: 999999;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+#perkins-panel.perkins-hidden {
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+}
+
+#perkins-panel.perkins-minimized {
+  width: 140px;
+  max-height: 44px;
+}
+
+#perkins-panel.perkins-minimized .perkins-panel-content {
+  display: none;
+}
+
+/* Panel Header */
+.perkins-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #1a3a32;
+  color: white;
+  cursor: move;
+}
+
+.perkins-logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.perkins-logo-icon {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  font-weight: 400;
+  width: 24px;
+  height: 24px;
+  background: #e07a3d;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perkins-logo-text {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.perkins-panel-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.perkins-panel-actions button {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background 0.2s;
+}
+
+.perkins-panel-actions button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Panel Content */
+.perkins-panel-content {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* Status Messages */
+.perkins-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  color: #5a5a5a;
+}
+
+.perkins-status-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.perkins-status-text {
+  font-size: 13px;
+}
+
+.perkins-panel-status.perkins-loading {
+  color: #1a3a32;
+}
+
+.perkins-panel-status.perkins-success {
+  color: #22c55e;
+  background: #f0fdf4;
+}
+
+.perkins-panel-status.perkins-error {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+/* Suggestions */
+.perkins-suggestions-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5a5a5a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e8e4de;
+  background: #f8f5f0;
+}
+
+.perkins-suggestions-list {
+  padding: 8px;
+}
+
+.perkins-suggestion {
+  padding: 12px;
+  background: #f8f5f0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.perkins-suggestion:last-child {
+  margin-bottom: 0;
+}
+
+.perkins-suggestion-original {
+  font-size: 13px;
+  color: #5a5a5a;
+  text-decoration: line-through;
+  margin-bottom: 4px;
+  word-break: break-word;
+}
+
+.perkins-suggestion-arrow {
+  color: #e07a3d;
+  font-size: 12px;
+  margin: 4px 0;
+}
+
+.perkins-suggestion-text {
+  font-size: 13px;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+  word-break: break-word;
+  background: white;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #e8e4de;
+}
+
+.perkins-suggestion-reason {
+  font-size: 12px;
+  color: #e07a3d;
+  font-style: italic;
+  margin-bottom: 10px;
+}
+
+.perkins-suggestion-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Buttons */
+.perkins-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.perkins-btn-accept {
+  background: #1a3a32;
+  color: white;
+}
+
+.perkins-btn-accept:hover {
+  background: #2d5a4a;
+}
+
+.perkins-btn-reject {
+  background: white;
+  color: #5a5a5a;
+  border: 1px solid #e8e4de;
+}
+
+.perkins-btn-reject:hover {
+  background: #f8f5f0;
+  color: #1a1a1a;
+}
+
+/* Toast Notification */
+.perkins-toast {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  padding: 10px 12px;
+  background: #1a3a32;
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.perkins-toast.perkins-toast-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Scrollbar */
+.perkins-panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.perkins-panel-content::-webkit-scrollbar-track {
+  background: #f8f5f0;
+}
+
+.perkins-panel-content::-webkit-scrollbar-thumb {
+  background: #e8e4de;
+  border-radius: 3px;
+}
+
+.perkins-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #ccc;
+}
+
+/* Loading Animation */
+@keyframes perkins-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.perkins-loading .perkins-status-icon {
+  animation: perkins-pulse 1.5s ease-in-out infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  #perkins-panel {
+    width: calc(100vw - 40px);
+    max-width: 320px;
+    bottom: 10px;
+    right: 10px;
+  }
+}

@@ -1,0 +1,430 @@
+/**
+ * Perkins Popup Controller
+ * Handles tab switching, settings management, and voice training
+ */
+
+// DOM Elements
+const elements = {
+  // Status
+  status: document.getElementById('status'),
+  statusText: document.querySelector('.status-text'),
+
+  // Tabs
+  tabs: document.querySelectorAll('.tab'),
+  tabContents: document.querySelectorAll('.tab-content'),
+
+  // Coach tab
+  coachEnabled: document.getElementById('coach-enabled'),
+  suggestionsCount: document.getElementById('suggestions-count'),
+  acceptedCount: document.getElementById('accepted-count'),
+  voiceScore: document.getElementById('voice-score'),
+  recentSuggestions: document.getElementById('recent-suggestions'),
+
+  // Voice tab
+  voiceStatus: document.getElementById('voice-status'),
+  writingSample: document.getElementById('writing-sample'),
+  addSampleBtn: document.getElementById('add-sample'),
+  sampleCount: document.getElementById('sample-count'),
+  voicePatterns: document.getElementById('voice-patterns'),
+  resetVoiceBtn: document.getElementById('reset-voice'),
+
+  // Settings tab
+  providerRadios: document.querySelectorAll('input[name="provider"]'),
+  apiKeyInput: document.getElementById('api-key'),
+  toggleKeyBtn: document.getElementById('toggle-key'),
+  saveSettingsBtn: document.getElementById('save-settings'),
+  intensitySelect: document.getElementById('intensity'),
+  passiveVoiceCheck: document.getElementById('passive-voice'),
+  sentenceLengthCheck: document.getElementById('sentence-length'),
+  wordChoiceCheck: document.getElementById('word-choice')
+};
+
+// State
+let state = {
+  settings: {
+    provider: 'anthropic',
+    apiKey: '',
+    intensity: 'balanced',
+    checks: {
+      passiveVoice: true,
+      sentenceLength: true,
+      wordChoice: true
+    }
+  },
+  voiceProfile: {
+    samples: [],
+    summary: null,
+    lastUpdated: null
+  },
+  stats: {
+    suggestionsToday: 0,
+    acceptedToday: 0,
+    totalSuggestions: 0,
+    totalAccepted: 0,
+    lastResetDate: null
+  },
+  coachEnabled: false,
+  recentSuggestions: []
+};
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadState();
+  initTabs();
+  initSettings();
+  initVoiceTraining();
+  initCoach();
+  updateUI();
+});
+
+// Load state from Chrome storage
+async function loadState() {
+  try {
+    const stored = await chrome.storage.local.get([
+      'settings',
+      'voiceProfile',
+      'stats',
+      'coachEnabled',
+      'recentSuggestions'
+    ]);
+
+    if (stored.settings) state.settings = { ...state.settings, ...stored.settings };
+    if (stored.voiceProfile) state.voiceProfile = { ...state.voiceProfile, ...stored.voiceProfile };
+    if (stored.stats) state.stats = { ...state.stats, ...stored.stats };
+    if (stored.coachEnabled !== undefined) state.coachEnabled = stored.coachEnabled;
+    if (stored.recentSuggestions) state.recentSuggestions = stored.recentSuggestions;
+
+    // Reset daily stats if new day
+    const today = new Date().toDateString();
+    if (state.stats.lastResetDate !== today) {
+      state.stats.suggestionsToday = 0;
+      state.stats.acceptedToday = 0;
+      state.stats.lastResetDate = today;
+      await saveState();
+    }
+  } catch (err) {
+    console.error('Failed to load state:', err);
+  }
+}
+
+// Save state to Chrome storage
+async function saveState() {
+  try {
+    await chrome.storage.local.set({
+      settings: state.settings,
+      voiceProfile: state.voiceProfile,
+      stats: state.stats,
+      coachEnabled: state.coachEnabled,
+      recentSuggestions: state.recentSuggestions
+    });
+  } catch (err) {
+    console.error('Failed to save state:', err);
+  }
+}
+
+// Tab switching
+function initTabs() {
+  elements.tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetId = tab.dataset.tab + '-tab';
+
+      // Update active tab
+      elements.tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Update active content
+      elements.tabContents.forEach(content => {
+        content.classList.toggle('active', content.id === targetId);
+      });
+    });
+  });
+}
+
+// Settings initialization
+function initSettings() {
+  // Load current settings into UI
+  elements.providerRadios.forEach(radio => {
+    radio.checked = radio.value === state.settings.provider;
+    radio.addEventListener('change', () => {
+      state.settings.provider = radio.value;
+    });
+  });
+
+  elements.apiKeyInput.value = state.settings.apiKey;
+  elements.intensitySelect.value = state.settings.intensity;
+  elements.passiveVoiceCheck.checked = state.settings.checks.passiveVoice;
+  elements.sentenceLengthCheck.checked = state.settings.checks.sentenceLength;
+  elements.wordChoiceCheck.checked = state.settings.checks.wordChoice;
+
+  // Toggle API key visibility
+  elements.toggleKeyBtn.addEventListener('click', () => {
+    const isPassword = elements.apiKeyInput.type === 'password';
+    elements.apiKeyInput.type = isPassword ? 'text' : 'password';
+  });
+
+  // Save settings
+  elements.saveSettingsBtn.addEventListener('click', async () => {
+    state.settings.apiKey = elements.apiKeyInput.value.trim();
+    state.settings.intensity = elements.intensitySelect.value;
+    state.settings.checks.passiveVoice = elements.passiveVoiceCheck.checked;
+    state.settings.checks.sentenceLength = elements.sentenceLengthCheck.checked;
+    state.settings.checks.wordChoice = elements.wordChoiceCheck.checked;
+
+    await saveState();
+    updateUI();
+    showToast('Settings saved!', 'success');
+
+    // Notify background worker of settings change
+    chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED', settings: state.settings });
+  });
+}
+
+// Voice training initialization
+function initVoiceTraining() {
+  // Add writing sample
+  elements.addSampleBtn.addEventListener('click', async () => {
+    const sample = elements.writingSample.value.trim();
+
+    if (!sample) {
+      showToast('Please paste a writing sample first', 'error');
+      return;
+    }
+
+    if (sample.length < 50) {
+      showToast('Sample is too short. Add at least 50 characters.', 'error');
+      return;
+    }
+
+    // Add sample
+    state.voiceProfile.samples.push({
+      text: sample,
+      addedAt: new Date().toISOString()
+    });
+
+    // Clear input
+    elements.writingSample.value = '';
+
+    // Request voice summary update from background worker
+    showToast('Sample added! Analyzing your voice...', 'success');
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'UPDATE_VOICE_PROFILE',
+        samples: state.voiceProfile.samples
+      });
+
+      if (response && response.summary) {
+        state.voiceProfile.summary = response.summary;
+        state.voiceProfile.lastUpdated = new Date().toISOString();
+      }
+    } catch (err) {
+      console.error('Failed to update voice profile:', err);
+    }
+
+    await saveState();
+    updateUI();
+  });
+
+  // Reset voice profile
+  elements.resetVoiceBtn.addEventListener('click', async () => {
+    if (!confirm('Are you sure? This will delete all your writing samples and voice profile.')) {
+      return;
+    }
+
+    state.voiceProfile = {
+      samples: [],
+      summary: null,
+      lastUpdated: null
+    };
+
+    await saveState();
+    updateUI();
+    showToast('Voice profile reset', 'success');
+
+    // Notify background worker
+    chrome.runtime.sendMessage({ type: 'VOICE_PROFILE_RESET' });
+  });
+}
+
+// Coach initialization
+function initCoach() {
+  elements.coachEnabled.checked = state.coachEnabled;
+
+  elements.coachEnabled.addEventListener('change', async () => {
+    state.coachEnabled = elements.coachEnabled.checked;
+    await saveState();
+    updateUI();
+
+    // Notify content scripts
+    chrome.runtime.sendMessage({
+      type: 'COACH_TOGGLE',
+      enabled: state.coachEnabled
+    });
+  });
+}
+
+// Update UI based on state
+function updateUI() {
+  // Update status indicator
+  const isConfigured = state.settings.apiKey && state.voiceProfile.samples.length > 0;
+  const isActive = isConfigured && state.coachEnabled;
+
+  elements.status.classList.toggle('active', isActive);
+
+  if (!state.settings.apiKey) {
+    elements.statusText.textContent = 'No API key';
+  } else if (state.voiceProfile.samples.length === 0) {
+    elements.statusText.textContent = 'No voice profile';
+  } else if (!state.coachEnabled) {
+    elements.statusText.textContent = 'Paused';
+  } else {
+    elements.statusText.textContent = 'Active';
+  }
+
+  // Update coach stats
+  elements.suggestionsCount.textContent = state.stats.suggestionsToday;
+  elements.acceptedCount.textContent = state.stats.acceptedToday;
+
+  if (state.stats.suggestionsToday > 0) {
+    const score = Math.round((1 - (state.stats.suggestionsToday / 100)) * 100);
+    elements.voiceScore.textContent = Math.max(0, Math.min(100, score)) + '%';
+  } else {
+    elements.voiceScore.textContent = '--';
+  }
+
+  // Update recent suggestions
+  updateRecentSuggestions();
+
+  // Update voice profile UI
+  const sampleCount = state.voiceProfile.samples.length;
+  elements.sampleCount.textContent = `${sampleCount} sample${sampleCount !== 1 ? 's' : ''}`;
+
+  if (sampleCount > 0) {
+    elements.voiceStatus.textContent = 'Trained';
+    elements.voiceStatus.classList.add('trained');
+  } else {
+    elements.voiceStatus.textContent = 'Not trained';
+    elements.voiceStatus.classList.remove('trained');
+  }
+
+  // Update voice patterns display
+  updateVoicePatterns();
+}
+
+// Update recent suggestions display
+function updateRecentSuggestions() {
+  const container = elements.recentSuggestions;
+
+  if (state.recentSuggestions.length === 0) {
+    container.innerHTML = `
+      <h3>Recent Suggestions</h3>
+      <div class="empty-state">
+        <p>No suggestions yet. Start writing in Google Docs and I'll help you stay on-voice.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const suggestionsHtml = state.recentSuggestions.slice(0, 3).map(s => `
+    <div class="suggestion-card">
+      <div class="suggestion-original">${escapeHtml(s.original)}</div>
+      <div class="suggestion-text">${escapeHtml(s.suggestion)}</div>
+      <div class="suggestion-reason">${escapeHtml(s.reason)}</div>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    <h3>Recent Suggestions</h3>
+    ${suggestionsHtml}
+  `;
+}
+
+// Update voice patterns display
+function updateVoicePatterns() {
+  const container = elements.voicePatterns;
+
+  if (!state.voiceProfile.summary) {
+    container.innerHTML = `
+      <h3>Detected Patterns</h3>
+      <div class="empty-state">
+        <p>Add writing samples to see your detected voice patterns.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Parse summary into display items
+  const patterns = state.voiceProfile.summary.split('.').filter(p => p.trim());
+
+  const patternsHtml = patterns.slice(0, 5).map(pattern => `
+    <div class="pattern-item">
+      <span class="pattern-icon">✓</span>
+      <span>${escapeHtml(pattern.trim())}</span>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    <h3>Detected Patterns</h3>
+    <div class="pattern-list">
+      ${patternsHtml}
+    </div>
+  `;
+}
+
+// Toast notification
+function showToast(message, type = 'info') {
+  // Remove existing toast
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  // Trigger animation
+  requestAnimationFrame(() => {
+    toast.classList.add('show');
+  });
+
+  // Remove after delay
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// Escape HTML for safe rendering
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Listen for messages from background/content scripts
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  switch (message.type) {
+    case 'NEW_SUGGESTION':
+      state.recentSuggestions.unshift(message.suggestion);
+      state.recentSuggestions = state.recentSuggestions.slice(0, 10);
+      state.stats.suggestionsToday++;
+      state.stats.totalSuggestions++;
+      saveState();
+      updateUI();
+      break;
+
+    case 'SUGGESTION_ACCEPTED':
+      state.stats.acceptedToday++;
+      state.stats.totalAccepted++;
+      saveState();
+      updateUI();
+      break;
+
+    case 'STATS_UPDATE':
+      if (message.stats) {
+        state.stats = { ...state.stats, ...message.stats };
+        updateUI();
+      }
+      break;
+  }
+});
