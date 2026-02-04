@@ -121,7 +121,7 @@
 
   // Text extraction from Google Docs
   function extractDocumentText() {
-    // Google Docs uses .kix-lineview for each line
+    // Method 1: Google Docs uses .kix-lineview for each line
     const lines = document.querySelectorAll('.kix-lineview');
     const textParts = [];
 
@@ -139,7 +139,38 @@
       }
     });
 
-    return textParts.join('\n');
+    if (textParts.length > 0) {
+      return textParts.join('\n');
+    }
+
+    // Method 2: Fallback - try .kix-paragraphrenderer
+    const paragraphs = document.querySelectorAll('.kix-paragraphrenderer');
+    if (paragraphs.length > 0) {
+      const paragraphTexts = [];
+      paragraphs.forEach(p => {
+        const text = p.textContent?.trim();
+        if (text) paragraphTexts.push(text);
+      });
+      if (paragraphTexts.length > 0) {
+        return paragraphTexts.join('\n');
+      }
+    }
+
+    // Method 3: Fallback - try the main content area
+    const contentArea = document.querySelector('.kix-appview-editor');
+    if (contentArea) {
+      const text = contentArea.textContent?.trim();
+      if (text) return text;
+    }
+
+    // Method 4: Last resort - get all visible text in docs-editor
+    const editor = document.querySelector('.docs-editor');
+    if (editor) {
+      return editor.textContent?.trim() || '';
+    }
+
+    console.log('Perkins: Could not extract document text');
+    return '';
   }
 
   // Get the current paragraph (where cursor is)
