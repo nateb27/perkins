@@ -464,8 +464,64 @@
     panel.querySelector('.perkins-btn-write').addEventListener('click', openWriteModal);
     panel.querySelector('.perkins-btn-learn').addEventListener('click', learnFromDocument);
 
+    // Make panel draggable by header
+    initDraggable(panel);
+
     // Initially hidden
     panel.classList.add('perkins-hidden');
+  }
+
+  // Make the panel draggable
+  function initDraggable(panel) {
+    const header = panel.querySelector('.perkins-panel-header');
+    let isDragging = false;
+    let startX, startY, startRight, startBottom;
+
+    header.addEventListener('mousedown', (e) => {
+      // Don't drag if clicking buttons
+      if (e.target.closest('button')) return;
+
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      // Get current position (panel uses right/bottom positioning)
+      const style = window.getComputedStyle(panel);
+      startRight = parseInt(style.right) || 20;
+      startBottom = parseInt(style.bottom) || 20;
+
+      header.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      const deltaX = startX - e.clientX;
+      const deltaY = startY - e.clientY;
+
+      // Calculate new position
+      let newRight = startRight + deltaX;
+      let newBottom = startBottom + deltaY;
+
+      // Keep panel on screen
+      const panelRect = panel.getBoundingClientRect();
+      const maxRight = window.innerWidth - panelRect.width - 10;
+      const maxBottom = window.innerHeight - panelRect.height - 10;
+
+      newRight = Math.max(10, Math.min(newRight, maxRight));
+      newBottom = Math.max(10, Math.min(newBottom, maxBottom));
+
+      panel.style.right = newRight + 'px';
+      panel.style.bottom = newBottom + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        header.style.cursor = 'move';
+      }
+    });
   }
 
   // Create keyboard shortcut hint element
