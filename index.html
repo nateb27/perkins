@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perkins — Sound Like Yourself</title>
+  <meta name="description" content="Grammarly makes everyone sound the same. Perkins makes you sound more like yourself. A Chrome extension that learns your writing voice.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #1a3a32;
+      --primary-light: #2d5a4a;
+      --accent: #e07a3d;
+      --accent-light: #fef4ed;
+      --text: #1a1a1a;
+      --text-muted: #5a5a5a;
+      --bg: #f8f5f0;
+      --bg-card: #ffffff;
+      --border: #e8e4de;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .serif {
+      font-family: 'Instrument Serif', Georgia, serif;
+    }
+
+    /* Decorative gradient blobs */
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.6;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .blob-1 {
+      width: 600px;
+      height: 600px;
+      background: linear-gradient(135deg, #e07a3d 0%, #f4a261 50%, #e9c46a 100%);
+      top: -200px;
+      right: -200px;
+    }
+
+    .blob-2 {
+      width: 500px;
+      height: 500px;
+      background: linear-gradient(135deg, #2a9d8f 0%, #4ecdc4 50%, #a8dadc 100%);
+      top: 400px;
+      left: -250px;
+    }
+
+    .blob-3 {
+      width: 400px;
+      height: 400px;
+      background: linear-gradient(135deg, #e07a3d 0%, #f4a261 100%);
+      bottom: -100px;
+      right: -100px;
+    }
+
+    /* Layout */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Nav */
+    nav {
+      padding: 24px 0;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(248, 245, 240, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.3s, background 0.3s;
+    }
+
+    nav.scrolled {
+      border-bottom-color: var(--border);
+      background: rgba(248, 245, 240, 0.95);
+    }
+
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: 1.75rem;
+      font-weight: 400;
+      color: var(--primary);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-cta {
+      background: var(--primary);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 100px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .nav-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(26, 58, 50, 0.25);
+      background: var(--primary-light);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: var(--primary);
+      color: white;
+      padding: 8px 18px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 32px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: clamp(2.75rem, 7vw, 4.5rem);
+      font-weight: 400;
+      line-height: 1.1;
+      margin-bottom: 28px;
+      letter-spacing: -0.02em;
+      color: var(--primary);
+    }
+
+    .hero h1 .highlight {
+      color: var(--accent);
+      font-style: italic;
+    }
+
+    .hero-sub {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 0 auto 48px;
+      line-height: 1.7;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--accent);
+      color: white;
+      padding: 18px 36px;
+      border-radius: 100px;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .hero-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(224, 122, 61, 0.35);
+    }
+
+    .hero-cta svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .hero-note {
+      margin-top: 20px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Demo visual */
+    .demo-container {
+      margin-top: 60px;
+      position: relative;
+    }
+
+    .demo-window {
+      background: var(--bg-card);
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .demo-toolbar {
+      background: #f5f5f5;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .demo-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e5e5e5;
+    }
+
+    .demo-dot:nth-child(1) { background: #ff5f57; }
+    .demo-dot:nth-child(2) { background: #ffbd2e; }
+    .demo-dot:nth-child(3) { background: #28ca42; }
+
+    .demo-content {
+      padding: 32px;
+      font-size: 16px;
+      line-height: 1.8;
+      min-height: 200px;
+    }
+
+    .demo-text {
+      color: var(--text);
+    }
+
+    .demo-text .issue {
+      background: linear-gradient(to bottom, transparent 60%, rgba(224, 122, 61, 0.25) 60%);
+      position: relative;
+      cursor: pointer;
+    }
+
+    .demo-suggestion {
+      position: absolute;
+      right: -280px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 260px;
+      background: var(--bg-card);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      padding: 16px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      opacity: 0;
+      animation: fadeIn 0.5s ease 1s forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .demo-suggestion-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .demo-suggestion-header svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .demo-suggestion p {
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .demo-suggestion-fix {
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 500;
+      display: inline-block;
+    }
+
+    @media (max-width: 900px) {
+      .demo-suggestion {
+        display: none;
+      }
+    }
+
+    /* Problem section */
+    .problem {
+      padding: 80px 0;
+      text-align: center;
+    }
+
+    .problem-text {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      line-height: 1.6;
+      max-width: 700px;
+      margin: 0 auto;
+      color: var(--text);
+    }
+
+    .problem-text em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    /* How it works */
+    .how-it-works {
+      padding: 80px 0;
+    }
+
+    .section-label {
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--primary);
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+
+    .section-title {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: clamp(2rem, 4vw, 2.75rem);
+      font-weight: 400;
+      margin-bottom: 60px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+    }
+
+    @media (max-width: 768px) {
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 48px;
+      }
+    }
+
+    .step {
+      text-align: left;
+    }
+
+    .step-number {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--accent) 0%, #f4a261 100%);
+      color: white;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 24px rgba(224, 122, 61, 0.25);
+    }
+
+    .step h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .step p {
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* Comparison */
+    .comparison {
+      padding: 80px 0;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 48px;
+    }
+
+    @media (max-width: 768px) {
+      .comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .comparison-card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 32px;
+      border: 1px solid var(--border);
+    }
+
+    .comparison-card.them {
+      opacity: 0.7;
+    }
+
+    .comparison-card.us {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px var(--primary), 0 8px 32px rgba(26, 58, 50, 0.1);
+    }
+
+    .comparison-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 24px;
+      color: var(--text-muted);
+    }
+
+    .comparison-card.us .comparison-label {
+      color: var(--primary);
+      opacity: 1;
+    }
+
+    .comparison-item {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .comparison-item:last-child {
+      border-bottom: none;
+    }
+
+    .comparison-item-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .comparison-item-value {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .comparison-card.us .comparison-item-value {
+      color: var(--text);
+    }
+
+    /* Testimonials */
+    .testimonials {
+      padding: 100px 0;
+      background: var(--primary);
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .testimonials::before {
+      content: '';
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: linear-gradient(135deg, rgba(42, 157, 143, 0.3) 0%, rgba(78, 205, 196, 0.2) 100%);
+      border-radius: 50%;
+      filter: blur(80px);
+      top: -200px;
+      right: -100px;
+    }
+
+    .testimonials .section-label {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .testimonials .section-title {
+      color: white;
+      margin-bottom: 56px;
+    }
+
+    .testimonial-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 28px;
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 768px) {
+      .testimonial-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .testimonial {
+      background: rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 36px;
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+    }
+
+    .testimonial-text {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: 1.3rem;
+      line-height: 1.6;
+      margin-bottom: 28px;
+      font-style: italic;
+    }
+
+    .testimonial-author {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .testimonial-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent) 0%, #f4a261 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .testimonial-name {
+      font-weight: 600;
+    }
+
+    .testimonial-title {
+      font-size: 14px;
+      opacity: 0.6;
+    }
+
+    /* For who */
+    .for-who {
+      padding: 80px 0;
+      text-align: center;
+    }
+
+    .for-who-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .for-who-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 14px 28px;
+      border-radius: 100px;
+      font-size: 15px;
+      font-weight: 500;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+
+    .for-who-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      border-color: var(--accent);
+    }
+
+    /* Final CTA */
+    .final-cta {
+      padding: 100px 0;
+      text-align: center;
+    }
+
+    .final-cta h2 {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 400;
+      margin-bottom: 24px;
+    }
+
+    .final-cta p {
+      color: var(--text-muted);
+      font-size: 1.125rem;
+      margin-bottom: 40px;
+    }
+
+    .waitlist-form {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      max-width: 440px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 500px) {
+      .waitlist-form {
+        flex-direction: column;
+      }
+    }
+
+    .waitlist-input {
+      flex: 1;
+      padding: 18px 24px;
+      border: 2px solid var(--border);
+      border-radius: 100px;
+      font-size: 16px;
+      font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: var(--bg-card);
+    }
+
+    .waitlist-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(224, 122, 61, 0.1);
+    }
+
+    .waitlist-button {
+      background: linear-gradient(135deg, var(--accent) 0%, #f4a261 100%);
+      color: white;
+      padding: 18px 36px;
+      border: none;
+      border-radius: 100px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      white-space: nowrap;
+    }
+
+    .waitlist-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(224, 122, 61, 0.35);
+    }
+
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    footer p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    /* Animations */
+    @media (prefers-reduced-motion: no-preference) {
+      .fade-up {
+        opacity: 0;
+        transform: translateY(20px);
+        animation: fadeUp 0.6s ease forwards;
+      }
+
+      @keyframes fadeUp {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .delay-1 { animation-delay: 0.1s; }
+      .delay-2 { animation-delay: 0.2s; }
+      .delay-3 { animation-delay: 0.3s; }
+      .delay-4 { animation-delay: 0.4s; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav id="nav">
+    <div class="container">
+      <a href="#" class="logo">Perkins</a>
+      <a href="#waitlist" class="nav-cta">Join Waitlist</a>
+    </div>
+  </nav>
+
+  <!-- Decorative blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge fade-up">Coming Soon</div>
+
+      <h1 class="fade-up delay-1">
+        Grammarly makes everyone sound the same.<br>
+        We make you sound more like <span class="highlight">yourself</span>.
+      </h1>
+
+      <p class="hero-sub fade-up delay-2">
+        A Chrome extension that learns your writing voice and coaches you to stay on-brand — everywhere you write.
+      </p>
+
+      <a href="#waitlist" class="hero-cta fade-up delay-3">
+        Join the Waitlist
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+        </svg>
+      </a>
+
+      <p class="hero-note fade-up delay-4">Free to try. $39/year to keep your voice.</p>
+
+      <!-- Demo -->
+      <div class="demo-container fade-up delay-4">
+        <div class="demo-window">
+          <div class="demo-toolbar">
+            <div class="demo-dot"></div>
+            <div class="demo-dot"></div>
+            <div class="demo-dot"></div>
+          </div>
+          <div class="demo-content">
+            <p class="demo-text">
+              Hi John,<br><br>
+              <span class="issue">I wanted to reach out to</span> discuss the upcoming project. I think we should <span class="issue">schedule a meeting to align on</span> the next steps and <span class="issue">ensure we're leveraging</span> all available resources.
+            </p>
+            <div class="demo-suggestion">
+              <div class="demo-suggestion-header">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Not your voice
+              </div>
+              <p>"I wanted to reach out to" — you never write this. You get straight to the point.</p>
+              <div class="demo-suggestion-fix">Try: "Let's talk about..."</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem -->
+  <section class="problem">
+    <div class="container">
+      <p class="problem-text">
+        AI writing tools make everyone sound <em>generic</em>. Corporate. Forgettable.<br><br>
+        But you have a voice. It's in your best tweets, your favorite essays, the emails people actually respond to.<br><br>
+        What if AI could help you sound <em>more</em> like that, not less?
+      </p>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works">
+    <div class="container">
+      <p class="section-label">How it works</p>
+      <h2 class="section-title">Three steps to writing like yourself</h2>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Train your voice</h3>
+          <p>Paste your best writing — tweets, essays, emails. Perkins learns your patterns, your rhythm, your quirks.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Write anywhere</h3>
+          <p>Google Docs, Gmail, Notion, Twitter. Our extension follows you, watching for moments where you drift off-voice.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Get coached, not corrected</h3>
+          <p>"This sounds too formal. You usually write punchier." Feedback that knows you, not generic grammar rules.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section class="comparison">
+    <div class="container">
+      <p class="section-label">The difference</p>
+      <h2 class="section-title">Not another grammar checker</h2>
+
+      <div class="comparison-grid">
+        <div class="comparison-card them">
+          <p class="comparison-label">Grammarly says</p>
+
+          <div class="comparison-item">
+            <p class="comparison-item-label">Passive voice</p>
+            <p class="comparison-item-value">"Passive voice detected. Consider revising."</p>
+          </div>
+
+          <div class="comparison-item">
+            <p class="comparison-item-label">Word choice</p>
+            <p class="comparison-item-value">"Consider: 'Utilize' instead of 'use'"</p>
+          </div>
+
+          <div class="comparison-item">
+            <p class="comparison-item-label">Sentence length</p>
+            <p class="comparison-item-value">"This sentence is too long."</p>
+          </div>
+        </div>
+
+        <div class="comparison-card us">
+          <p class="comparison-label">Perkins says</p>
+
+          <div class="comparison-item">
+            <p class="comparison-item-label">Passive voice</p>
+            <p class="comparison-item-value">"You never write passively. This doesn't sound like you."</p>
+          </div>
+
+          <div class="comparison-item">
+            <p class="comparison-item-label">Word choice</p>
+            <p class="comparison-item-value">"You hate 'utilize.' You'd say 'use.'"</p>
+          </div>
+
+          <div class="comparison-item">
+            <p class="comparison-item-label">Sentence length</p>
+            <p class="comparison-item-value">"Your best posts are punchy. Break this up."</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials (placeholder for now) -->
+  <section class="testimonials">
+    <div class="container">
+      <p class="section-label">Early feedback</p>
+      <h2 class="section-title">What beta users are saying</h2>
+
+      <div class="testimonial-grid">
+        <div class="testimonial">
+          <p class="testimonial-text">"It's like having an editor who's read everything I've ever written. Finally, AI that makes me sound more like me, not less."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar">JM</div>
+            <div>
+              <p class="testimonial-name">Jordan M.</p>
+              <p class="testimonial-title">Newsletter writer, 12K subscribers</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="testimonial">
+          <p class="testimonial-text">"I was skeptical, but it actually caught patterns I didn't even know I had. Now my first drafts are so much closer to my real voice."</p>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar">SK</div>
+            <div>
+              <p class="testimonial-name">Sarah K.</p>
+              <p class="testimonial-title">Founder, writes investor updates</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- For who -->
+  <section class="for-who">
+    <div class="container">
+      <p class="section-label">Built for</p>
+      <h2 class="section-title">Writers whose words are their brand</h2>
+
+      <div class="for-who-list">
+        <div class="for-who-item">Newsletter writers</div>
+        <div class="for-who-item">Twitter creators</div>
+        <div class="for-who-item">Founders</div>
+        <div class="for-who-item">LinkedIn voices</div>
+        <div class="for-who-item">Bloggers</div>
+        <div class="for-who-item">Freelance writers</div>
+        <div class="for-who-item">Content marketers</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="final-cta" id="waitlist">
+    <div class="container">
+      <h2>Ready to sound like yourself?</h2>
+      <p>Join the waitlist. We're launching soon.</p>
+
+      <form class="waitlist-form" action="#" method="POST" onsubmit="handleSubmit(event)">
+        <input type="email" class="waitlist-input" placeholder="you@email.com" required>
+        <button type="submit" class="waitlist-button">Join Waitlist</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2026 Perkins. <a href="#">Twitter</a> &middot; <a href="#">Privacy</a></p>
+    </div>
+  </footer>
+
+  <script>
+    // Nav scroll effect
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 10);
+    });
+
+    // Form submission
+    function handleSubmit(e) {
+      e.preventDefault();
+      const email = e.target.querySelector('input').value;
+
+      // Replace with actual form submission
+      // For now, just show success
+      e.target.innerHTML = '<p style="color: var(--accent); font-weight: 500;">Thanks! We\'ll be in touch soon.</p>';
+
+      // TODO: Send to your backend or email service
+      console.log('Waitlist signup:', email);
+    }
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
