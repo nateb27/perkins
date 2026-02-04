@@ -54,7 +54,8 @@ async function loadState() {
       apiKey: '',
       intensity: 'balanced',
       styleGuide: '',
-      checks: { grammar: true }
+      checks: { grammar: true },
+      ambientLearning: false
     };
     voiceProfile = stored.voiceProfile || { samples: [], summary: null };
     learnedExceptions = stored.learnedExceptions || [];
@@ -93,6 +94,11 @@ async function handleMessage(message, sender) {
       if (message.learnedExceptions) {
         learnedExceptions = message.learnedExceptions;
       }
+      // Broadcast settings to content scripts
+      broadcastToContentScripts({
+        type: 'SETTINGS_UPDATED',
+        settings: settings
+      });
       return { success: true };
 
     case 'EXCEPTIONS_UPDATED':
@@ -131,6 +137,15 @@ async function handleMessage(message, sender) {
 
     case 'REVIEW_DOCUMENT':
       return await reviewDocument(message.text);
+
+    case 'AMBIENT_LEARN':
+      return await ambientLearn(message.text, message.typedCharCount);
+
+    case 'CHAT_MESSAGE':
+      return await handleChatMessage(message.message, message.context, message.history);
+
+    case 'GENERATE_IN_VOICE':
+      return await generateInVoice(message.prompt, message.length);
 
     default:
       return { error: 'Unknown message type' };
@@ -196,11 +211,20 @@ Respond with ONLY the voice profile as a series of short observations separated 
   }
 }
 
+// Count words in text
+function countWords(text) {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+}
+
 // Learn from a document (passive learning)
 async function learnFromDocument(text, source, title) {
   if (!text || text.length < 100) {
     return { error: 'Document is too short to learn from' };
   }
+
+  // Count words for badges
+  const wordCount = countWords(text);
 
   // Truncate if too long (keep first 5000 chars)
   const truncatedText = text.length > 5000 ? text.substring(0, 5000) + '...' : text;
@@ -216,20 +240,37 @@ async function learnFromDocument(text, source, title) {
   // Keep only last 20 samples
   voiceProfile.samples = voiceProfile.samples.slice(-20);
 
+  // Notify popup of words added (for badges)
+  chrome.runtime.sendMessage({
+    type: 'WORDS_ADDED',
+    wordCount: wordCount
+  }).catch(() => {});
+
+  // Notify popup of document analyzed
+  chrome.runtime.sendMessage({
+    type: 'DOCUMENT_ANALYZED'
+  }).catch(() => {});
+
   // Re-generate voice summary if we have an API key
   if (settings?.apiKey) {
     try {
       const result = await updateVoiceProfile(voiceProfile.samples);
-      return { success: true, voiceProfile, summary: result.summary };
+
+      // Notify popup that a pattern was learned (voice profile updated)
+      chrome.runtime.sendMessage({
+        type: 'PATTERN_LEARNED'
+      }).catch(() => {});
+
+      return { success: true, voiceProfile, summary: result.summary, wordCount };
     } catch (err) {
       // Still save the sample even if summary generation fails
       await chrome.storage.local.set({ voiceProfile });
-      return { success: true, voiceProfile, warning: 'Sample added but summary update failed' };
+      return { success: true, voiceProfile, warning: 'Sample added but summary update failed', wordCount };
     }
   }
 
   await chrome.storage.local.set({ voiceProfile });
-  return { success: true, voiceProfile };
+  return { success: true, voiceProfile, wordCount };
 }
 
 // Import from URL (fetch and extract article text)
@@ -321,6 +362,9 @@ async function importFromUrl(url) {
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const title = titleMatch ? titleMatch[1].trim() : new URL(url).hostname;
 
+    // Count words for badges
+    const wordCount = countWords(articleText);
+
     // Add as sample
     voiceProfile.samples.push({
       text: articleText,
@@ -333,14 +377,30 @@ async function importFromUrl(url) {
     // Keep only last 20 samples
     voiceProfile.samples = voiceProfile.samples.slice(-20);
 
+    // Notify popup of words added (for badges)
+    chrome.runtime.sendMessage({
+      type: 'WORDS_ADDED',
+      wordCount: wordCount
+    }).catch(() => {});
+
+    // Notify popup of document analyzed
+    chrome.runtime.sendMessage({
+      type: 'DOCUMENT_ANALYZED'
+    }).catch(() => {});
+
     // Update voice summary
     if (settings?.apiKey) {
       await updateVoiceProfile(voiceProfile.samples);
+
+      // Notify popup that a pattern was learned
+      chrome.runtime.sendMessage({
+        type: 'PATTERN_LEARNED'
+      }).catch(() => {});
     }
 
     await chrome.storage.local.set({ voiceProfile });
 
-    return { success: true, voiceProfile };
+    return { success: true, voiceProfile, wordCount };
   } catch (err) {
     console.error('URL import failed:', err);
     // CORS errors and network failures typically throw here
@@ -431,10 +491,34 @@ Respond in this exact JSON format:
       "reason": "brief personalized explanation",
       "type": "voice|style_guide|grammar"
     }
-  ]
+  ],
+  "detections": {
+    "aiScore": 0-100,
+    "genericScore": 0-100,
+    "aiIndicators": ["list of specific phrases that sound AI-generated"],
+    "genericIndicators": ["list of specific phrases that sound generic/Grammarly-fied"]
+  }
 }
 
-If the text matches their voice well, return: {"suggestions": []}
+AI-GENERATED DETECTION (aiScore):
+Look for signs the text was written by AI:
+- Overly formal or stilted phrasing
+- Perfect parallel structure that feels mechanical
+- Phrases like "It's important to note", "In conclusion", "Furthermore"
+- Excessive hedging ("It's worth mentioning", "One might argue")
+- Unnatural transitions between ideas
+- Lack of personality, opinion, or authentic voice
+- Generic analogies and examples
+
+GENERIC/GRAMMARLY DETECTION (genericScore):
+Look for signs the text has been over-polished into blandness:
+- Corporate buzzwords ("leverage", "synergy", "streamline")
+- Passive voice overuse where active voice is more natural
+- Overly cautious language that removes personality
+- Perfect grammar that feels sterile
+- Formal constructions where casual would be better ("utilize" vs "use")
+
+If the text matches their voice well, return: {"suggestions": [], "detections": {"aiScore": 0, "genericScore": 0, "aiIndicators": [], "genericIndicators": []}}
 
 CRITICAL RULES:
 - This is about THEIR voice, not "correct" writing
@@ -484,6 +568,16 @@ CRITICAL RULES:
           // Popup might be closed
         });
       }
+    }
+
+    // Ensure detections object exists with defaults
+    if (!result.detections) {
+      result.detections = {
+        aiScore: 0,
+        genericScore: 0,
+        aiIndicators: [],
+        genericIndicators: []
+      };
     }
 
     return result;
@@ -592,6 +686,83 @@ async function callOpenAI(prompt) {
   return data.choices[0].message.content;
 }
 
+// Ambient learning - learn from user's active typing
+async function ambientLearn(text, typedCharCount) {
+  if (!text || text.length < 200) {
+    return { error: 'Not enough text to learn from' };
+  }
+
+  if (!settings?.ambientLearning) {
+    return { error: 'Ambient learning is disabled' };
+  }
+
+  // Use the typed char count to estimate what portion of text was typed
+  // This is a heuristic - we can't perfectly distinguish typed vs pasted
+  const wordCount = countWords(text);
+
+  // Truncate to a reasonable sample size
+  const sampleText = text.length > 3000 ? text.substring(0, 3000) + '...' : text;
+
+  // Check if we already have similar content
+  const existingSamples = voiceProfile.samples || [];
+  const isDuplicate = existingSamples.some(sample => {
+    const similarity = calculateTextSimilarity(sample.text, sampleText);
+    return similarity > 0.7; // 70% similar = duplicate
+  });
+
+  if (isDuplicate) {
+    return { error: 'Similar content already in voice profile', duplicate: true };
+  }
+
+  // Add as ambient sample with lower weight indicator
+  voiceProfile.samples.push({
+    text: sampleText,
+    source: 'ambient',
+    title: 'Writing session ' + new Date().toLocaleDateString(),
+    addedAt: new Date().toISOString(),
+    typedChars: typedCharCount
+  });
+
+  // Keep only last 20 samples
+  voiceProfile.samples = voiceProfile.samples.slice(-20);
+
+  // Notify popup of words added
+  chrome.runtime.sendMessage({
+    type: 'WORDS_ADDED',
+    wordCount: Math.round(typedCharCount / 5) // Estimate words from chars
+  }).catch(() => {});
+
+  // Update voice profile if we have API key
+  if (settings?.apiKey) {
+    try {
+      const result = await updateVoiceProfile(voiceProfile.samples);
+
+      chrome.runtime.sendMessage({
+        type: 'PATTERN_LEARNED'
+      }).catch(() => {});
+
+      return { success: true, summary: result.summary };
+    } catch (err) {
+      await chrome.storage.local.set({ voiceProfile });
+      return { success: true, warning: 'Sample saved but analysis pending' };
+    }
+  }
+
+  await chrome.storage.local.set({ voiceProfile });
+  return { success: true };
+}
+
+// Simple text similarity check (Jaccard similarity on words)
+function calculateTextSimilarity(text1, text2) {
+  const words1 = new Set(text1.toLowerCase().split(/\s+/));
+  const words2 = new Set(text2.toLowerCase().split(/\s+/));
+
+  const intersection = new Set([...words1].filter(x => words2.has(x)));
+  const union = new Set([...words1, ...words2]);
+
+  return intersection.size / union.size;
+}
+
 // Full document review for side-by-side view
 async function reviewDocument(text) {
   if (!settings?.apiKey) {
@@ -696,6 +867,111 @@ RULES:
     return result;
   } catch (err) {
     console.error('Document review failed:', err);
+    return { error: err.message };
+  }
+}
+
+// ============================================
+// Chat functionality
+// ============================================
+
+async function handleChatMessage(userMessage, context, history) {
+  if (!settings?.apiKey) {
+    return { error: 'No API key configured' };
+  }
+
+  // Rate limiting
+  if (!rateLimiter.canMakeCall()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
+    return { error: `Please wait ${waitTime} seconds.`, rateLimited: true };
+  }
+  rateLimiter.recordCall();
+
+  // Build conversation with voice context
+  const voiceContext = voiceProfile?.summary
+    ? `You understand this writer's voice deeply:\n${voiceProfile.summary}\n\n`
+    : '';
+
+  const documentContext = context
+    ? `Current text they're working on:\n"""${context.substring(0, 2000)}"""\n\n`
+    : '';
+
+  const historyText = history && history.length > 0
+    ? history.map(h => `${h.role === 'user' ? 'User' : 'Perkins'}: ${h.content}`).join('\n') + '\n\n'
+    : '';
+
+  const prompt = `You are Perkins, a friendly writing coach who deeply understands this specific writer's voice and style. You're having a conversation about their writing.
+
+${voiceContext}${documentContext}Previous conversation:
+${historyText}User: ${userMessage}
+
+Respond helpfully and conversationally. Keep responses concise (2-3 paragraphs max). If they ask about their writing style, reference specific patterns you've observed. If they ask for help, provide suggestions that match their voice.`;
+
+  try {
+    const reply = await callAI(prompt);
+    return { reply };
+  } catch (err) {
+    console.error('Chat failed:', err);
+    return { error: err.message };
+  }
+}
+
+// ============================================
+// Generate in voice functionality
+// ============================================
+
+async function generateInVoice(prompt, length = 'medium') {
+  if (!settings?.apiKey) {
+    return { error: 'No API key configured' };
+  }
+
+  if (!voiceProfile?.summary) {
+    return { error: 'Train your voice profile first' };
+  }
+
+  // Rate limiting
+  if (!rateLimiter.canMakeCall()) {
+    const waitTime = Math.ceil(rateLimiter.getTimeUntilNextCall() / 1000);
+    return { error: `Please wait ${waitTime} seconds.`, rateLimited: true };
+  }
+  rateLimiter.recordCall();
+
+  const lengthGuide = {
+    short: '1-2 sentences, punchy and brief',
+    medium: '1-2 paragraphs',
+    long: '3-4 paragraphs, comprehensive'
+  };
+
+  const sampleTexts = voiceProfile.samples.slice(0, 3)
+    .map(s => `"${s.text.substring(0, 300)}..."`)
+    .join('\n\n');
+
+  const aiPrompt = `You are a ghostwriter who has mastered this specific person's voice. Write exactly as they would write.
+
+VOICE PROFILE:
+${voiceProfile.summary}
+
+SAMPLE WRITINGS (mimic this style exactly):
+${sampleTexts}
+
+TASK:
+Write the following in their voice: ${prompt}
+
+LENGTH: ${lengthGuide[length] || lengthGuide.medium}
+
+CRITICAL RULES:
+- Match their sentence length patterns exactly
+- Use their vocabulary and phrases
+- Maintain their tone (formal/casual, direct/indirect)
+- Mirror their punctuation habits
+- This should be indistinguishable from their own writing
+- Do NOT add any meta-commentary, just write the content`;
+
+  try {
+    const text = await callAI(aiPrompt);
+    return { text };
+  } catch (err) {
+    console.error('Generate failed:', err);
     return { error: err.message };
   }
 }

@@ -898,3 +898,565 @@
 .perkins-review-actions .perkins-btn-copy-final:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* ============================================
+   Updated Panel Footer with Multiple Buttons
+   ============================================ */
+
+.perkins-panel-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid #e8e4de;
+  background: #f8f5f0;
+}
+
+.perkins-btn-review {
+  grid-column: 1 / -1;
+}
+
+.perkins-btn-chat,
+.perkins-btn-write,
+.perkins-btn-learn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #e8e4de;
+  border-radius: 6px;
+  color: #5a5a5a;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.perkins-btn-chat:hover,
+.perkins-btn-write:hover,
+.perkins-btn-learn:hover {
+  background: #fef4ed;
+  border-color: #e07a3d;
+  color: #e07a3d;
+}
+
+.perkins-chat-icon,
+.perkins-write-icon,
+.perkins-learn-icon {
+  font-size: 12px;
+}
+
+/* ============================================
+   Chat Modal
+   ============================================ */
+
+#perkins-chat-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999999;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#perkins-chat-modal.perkins-chat-visible {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perkins-chat-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.perkins-chat-container {
+  position: relative;
+  width: 90vw;
+  max-width: 600px;
+  height: 70vh;
+  max-height: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.perkins-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #1a3a32;
+  color: white;
+}
+
+.perkins-chat-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+}
+
+.perkins-btn-close-chat {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.2s;
+}
+
+.perkins-btn-close-chat:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.perkins-chat-context {
+  padding: 8px 16px;
+  background: #f8f5f0;
+  border-bottom: 1px solid #e8e4de;
+  font-size: 12px;
+  color: #5a5a5a;
+}
+
+.perkins-context-label {
+  font-weight: 500;
+  margin-right: 6px;
+}
+
+.perkins-context-text {
+  font-style: italic;
+}
+
+.perkins-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.perkins-chat-welcome {
+  text-align: center;
+  color: #5a5a5a;
+  padding: 20px;
+}
+
+.perkins-chat-welcome p {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.perkins-chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.perkins-suggestion-chip {
+  padding: 8px 12px;
+  background: #f8f5f0;
+  border: 1px solid #e8e4de;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #5a5a5a;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.perkins-suggestion-chip:hover {
+  background: #fef4ed;
+  border-color: #e07a3d;
+  color: #e07a3d;
+}
+
+.perkins-chat-message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.perkins-chat-user {
+  align-self: flex-end;
+  background: #1a3a32;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.perkins-chat-assistant {
+  align-self: flex-start;
+  background: #f8f5f0;
+  color: #1a1a1a;
+  border-bottom-left-radius: 4px;
+}
+
+.perkins-chat-loading {
+  color: #5a5a5a;
+}
+
+.perkins-typing-indicator {
+  display: inline-block;
+  animation: typingPulse 1s infinite;
+}
+
+@keyframes typingPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.perkins-chat-input-area {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e8e4de;
+  background: #f8f5f0;
+}
+
+#perkins-chat-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #e8e4de;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: none;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#perkins-chat-input:focus {
+  border-color: #1a3a32;
+}
+
+.perkins-btn-send {
+  padding: 10px 16px;
+  background: #1a3a32;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.perkins-btn-send:hover {
+  background: #2d5a4a;
+}
+
+/* ============================================
+   Write Modal
+   ============================================ */
+
+#perkins-write-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999999;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#perkins-write-modal.perkins-write-visible {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.perkins-write-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.perkins-write-container {
+  position: relative;
+  width: 90vw;
+  max-width: 600px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.perkins-write-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #1a3a32;
+  color: white;
+}
+
+.perkins-write-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+}
+
+.perkins-btn-close-write {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.2s;
+}
+
+.perkins-btn-close-write:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.perkins-write-body {
+  padding: 20px;
+}
+
+.perkins-write-input-section label,
+.perkins-write-output-section label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #5a5a5a;
+  margin-bottom: 8px;
+}
+
+#perkins-write-prompt {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e8e4de;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#perkins-write-prompt:focus {
+  border-color: #1a3a32;
+}
+
+.perkins-write-options {
+  display: flex;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.perkins-write-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #5a5a5a;
+  cursor: pointer;
+}
+
+.perkins-write-option input {
+  accent-color: #e07a3d;
+}
+
+.perkins-btn-generate {
+  width: 100%;
+  padding: 12px;
+  background: #1a3a32;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.perkins-btn-generate:hover {
+  background: #2d5a4a;
+}
+
+.perkins-btn-generate:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.perkins-write-output-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e8e4de;
+}
+
+#perkins-write-output {
+  padding: 16px;
+  background: #f8f5f0;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1a1a1a;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.perkins-write-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.perkins-write-actions .perkins-btn {
+  flex: 1;
+  padding: 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.perkins-btn-copy {
+  background: #e07a3d;
+  color: white;
+  border: none;
+}
+
+.perkins-btn-copy:hover {
+  background: #c96a32;
+}
+
+.perkins-btn-insert {
+  background: #1a3a32;
+  color: white;
+  border: none;
+}
+
+.perkins-btn-insert:hover {
+  background: #2d5a4a;
+}
+
+.perkins-btn-regenerate {
+  background: white;
+  color: #5a5a5a;
+  border: 1px solid #e8e4de;
+}
+
+.perkins-btn-regenerate:hover {
+  background: #f8f5f0;
+}
+
+.perkins-btn-primary {
+  background: #1a3a32 !important;
+  color: white !important;
+}
+
+/* ============================================
+   AI & Generic Content Detectors
+   ============================================ */
+
+.perkins-detections {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perkins-detection {
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.perkins-detection-ai {
+  background: #fef3f2;
+  border-left-color: #ef4444;
+}
+
+.perkins-detection-ai.perkins-detection-high {
+  background: #fee2e2;
+  border-left-color: #dc2626;
+}
+
+.perkins-detection-generic {
+  background: #fefce8;
+  border-left-color: #f59e0b;
+}
+
+.perkins-detection-generic.perkins-detection-high {
+  background: #fef9c3;
+  border-left-color: #d97706;
+}
+
+.perkins-detection-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.perkins-detection-icon {
+  font-size: 16px;
+}
+
+.perkins-detection-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.perkins-detection-text {
+  font-size: 12px;
+  color: #5a5a5a;
+  margin-bottom: 8px;
+}
+
+.perkins-detection-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.perkins-indicator {
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #5a5a5a;
+  font-style: italic;
+}
+
+/* Animation for high detection scores */
+@keyframes detectionPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.perkins-detection-high .perkins-detection-icon {
+  animation: detectionPulse 2s ease-in-out infinite;
+}

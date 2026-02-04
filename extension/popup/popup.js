@@ -22,6 +22,18 @@ const elements = {
   voiceScore: document.getElementById('voice-score'),
   recentSuggestions: document.getElementById('recent-suggestions'),
 
+  // Badges & Flywheel
+  badgesSection: document.getElementById('badges-section'),
+  currentMilestone: document.getElementById('current-milestone'),
+  milestoneProgress: document.getElementById('milestone-progress'),
+  milestoneProgressFill: document.getElementById('milestone-progress-fill'),
+  totalWordsCount: document.getElementById('total-words-count'),
+  earnedBadges: document.getElementById('earned-badges'),
+  flywheelStats: document.getElementById('flywheel-stats'),
+  patternsLearnedCount: document.getElementById('patterns-learned-count'),
+  documentsAnalyzedCount: document.getElementById('documents-analyzed-count'),
+  improvementPercent: document.getElementById('improvement-percent'),
+
   // Voice tab
   voiceStatus: document.getElementById('voice-status'),
   writingSample: document.getElementById('writing-sample'),
@@ -42,6 +54,7 @@ const elements = {
   sentenceLengthCheck: document.getElementById('sentence-length'),
   wordChoiceCheck: document.getElementById('word-choice'),
   checkGrammarCheck: document.getElementById('check-grammar'),
+  ambientLearningCheck: document.getElementById('ambient-learning'),
   styleGuideInput: document.getElementById('style-guide'),
   learnedExceptions: document.getElementById('learned-exceptions'),
 
@@ -55,6 +68,21 @@ const elements = {
   goToSettingsBtn: document.getElementById('go-to-settings')
 };
 
+// Writing milestones (word counts mapped to famous works)
+const WRITING_MILESTONES = [
+  { words: 272, name: 'Gettysburg Address', icon: '📜', description: 'Lincoln\'s famous speech' },
+  { words: 1600, name: 'I Have a Dream', icon: '✊', description: 'MLK\'s iconic speech' },
+  { words: 5000, name: 'Short Story', icon: '📖', description: 'A complete short story' },
+  { words: 27000, name: 'The Old Man and the Sea', icon: '🎣', description: 'Hemingway\'s novella' },
+  { words: 47000, name: 'The Great Gatsby', icon: '🥂', description: 'Fitzgerald\'s masterpiece' },
+  { words: 77000, name: 'Harry Potter Book 1', icon: '⚡', description: 'The Sorcerer\'s Stone' },
+  { words: 89000, name: '1984', icon: '👁️', description: 'Orwell\'s dystopia' },
+  { words: 225000, name: 'East of Eden', icon: '🌾', description: 'Steinbeck\'s epic' },
+  { words: 480000, name: 'Lord of the Rings', icon: '💍', description: 'Tolkien\'s trilogy' },
+  { words: 580000, name: 'War and Peace', icon: '⚔️', description: 'Tolstoy\'s masterwork' },
+  { words: 1084000, name: 'Harry Potter Series', icon: '🏰', description: 'All 7 books' }
+];
+
 // State
 let state = {
   settings: {
@@ -67,7 +95,8 @@ let state = {
       sentenceLength: true,
       wordChoice: true,
       grammar: true
-    }
+    },
+    ambientLearning: false // Opt-in ambient learning
   },
   voiceProfile: {
     samples: [],
@@ -81,6 +110,19 @@ let state = {
     totalSuggestions: 0,
     totalAccepted: 0,
     lastResetDate: null
+  },
+  // Writing stats for badges and flywheel
+  writingStats: {
+    totalWords: 0,
+    wordsThisWeek: 0,
+    wordsThisMonth: 0,
+    weekStartDate: null,
+    monthStartDate: null,
+    earnedBadges: [], // Array of milestone names earned
+    patternsLearned: 0,
+    suggestionsReducedPercent: 0,
+    firstWeekSuggestions: null, // Track to calculate improvement
+    documentsAnalyzed: 0
   },
   coachEnabled: false,
   recentSuggestions: []
@@ -110,6 +152,7 @@ async function loadState() {
       'voiceProfile',
       'learnedExceptions',
       'stats',
+      'writingStats',
       'coachEnabled',
       'recentSuggestions'
     ]);
@@ -125,6 +168,7 @@ async function loadState() {
     if (stored.voiceProfile) state.voiceProfile = { ...state.voiceProfile, ...stored.voiceProfile };
     if (stored.learnedExceptions) state.learnedExceptions = stored.learnedExceptions;
     if (stored.stats) state.stats = { ...state.stats, ...stored.stats };
+    if (stored.writingStats) state.writingStats = { ...state.writingStats, ...stored.writingStats };
     if (stored.coachEnabled !== undefined) state.coachEnabled = stored.coachEnabled;
     if (stored.recentSuggestions) state.recentSuggestions = stored.recentSuggestions;
 
@@ -136,9 +180,40 @@ async function loadState() {
       state.stats.lastResetDate = today;
       await saveState();
     }
+
+    // Reset weekly stats if new week
+    const weekStart = getWeekStart();
+    if (state.writingStats.weekStartDate !== weekStart) {
+      state.writingStats.wordsThisWeek = 0;
+      state.writingStats.weekStartDate = weekStart;
+      await saveState();
+    }
+
+    // Reset monthly stats if new month
+    const monthStart = getMonthStart();
+    if (state.writingStats.monthStartDate !== monthStart) {
+      state.writingStats.wordsThisMonth = 0;
+      state.writingStats.monthStartDate = monthStart;
+      await saveState();
+    }
   } catch (err) {
     console.error('Failed to load state:', err);
   }
+}
+
+// Get start of current week (Sunday)
+function getWeekStart() {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - dayOfWeek);
+  return weekStart.toDateString();
+}
+
+// Get start of current month
+function getMonthStart() {
+  const now = new Date();
+  return `${now.getFullYear()}-${now.getMonth()}`;
 }
 
 // Save state to Chrome storage
@@ -149,6 +224,7 @@ async function saveState() {
       voiceProfile: state.voiceProfile,
       learnedExceptions: state.learnedExceptions,
       stats: state.stats,
+      writingStats: state.writingStats,
       coachEnabled: state.coachEnabled,
       recentSuggestions: state.recentSuggestions
     });
@@ -197,6 +273,7 @@ function initSettings() {
   elements.sentenceLengthCheck.checked = state.settings.checks.sentenceLength;
   elements.wordChoiceCheck.checked = state.settings.checks.wordChoice;
   elements.checkGrammarCheck.checked = state.settings.checks.grammar;
+  elements.ambientLearningCheck.checked = state.settings.ambientLearning || false;
   elements.styleGuideInput.value = state.settings.styleGuide || '';
 
   // Toggle API key visibility
@@ -229,6 +306,7 @@ function initSettings() {
     state.settings.checks.sentenceLength = elements.sentenceLengthCheck.checked;
     state.settings.checks.wordChoice = elements.wordChoiceCheck.checked;
     state.settings.checks.grammar = elements.checkGrammarCheck.checked;
+    state.settings.ambientLearning = elements.ambientLearningCheck.checked;
 
     await saveState();
     updateUI();
@@ -438,10 +516,139 @@ function updateSetupProgress() {
   }
 }
 
+// Get current milestone and progress
+function getCurrentMilestoneInfo() {
+  const totalWords = state.writingStats.totalWords;
+
+  // Find current and next milestone
+  let currentMilestone = null;
+  let nextMilestone = WRITING_MILESTONES[0];
+
+  for (let i = 0; i < WRITING_MILESTONES.length; i++) {
+    if (totalWords >= WRITING_MILESTONES[i].words) {
+      currentMilestone = WRITING_MILESTONES[i];
+      nextMilestone = WRITING_MILESTONES[i + 1] || null;
+    } else {
+      break;
+    }
+  }
+
+  // Calculate progress to next milestone
+  let progress = 0;
+  let wordsToNext = 0;
+
+  if (nextMilestone) {
+    const startWords = currentMilestone ? currentMilestone.words : 0;
+    const range = nextMilestone.words - startWords;
+    const wordsInRange = totalWords - startWords;
+    progress = Math.min(100, Math.round((wordsInRange / range) * 100));
+    wordsToNext = nextMilestone.words - totalWords;
+  } else {
+    progress = 100; // All milestones achieved
+  }
+
+  return { currentMilestone, nextMilestone, progress, wordsToNext };
+}
+
+// Check and award new badges
+function checkForNewBadges() {
+  const totalWords = state.writingStats.totalWords;
+  const earned = state.writingStats.earnedBadges || [];
+  let newBadge = null;
+
+  for (const milestone of WRITING_MILESTONES) {
+    if (totalWords >= milestone.words && !earned.includes(milestone.name)) {
+      earned.push(milestone.name);
+      newBadge = milestone;
+    }
+  }
+
+  state.writingStats.earnedBadges = earned;
+  return newBadge;
+}
+
+// Update badges and flywheel display
+function updateBadgesDisplay() {
+  const { currentMilestone, nextMilestone, progress, wordsToNext } = getCurrentMilestoneInfo();
+  const totalWords = state.writingStats.totalWords;
+
+  // Update total words count
+  if (elements.totalWordsCount) {
+    elements.totalWordsCount.textContent = formatNumber(totalWords);
+  }
+
+  // Update milestone progress
+  if (elements.currentMilestone) {
+    if (nextMilestone) {
+      elements.currentMilestone.innerHTML = `
+        <span class="milestone-icon">${nextMilestone.icon}</span>
+        <span class="milestone-text">
+          <strong>${formatNumber(wordsToNext)}</strong> words to
+          <em>${nextMilestone.name}</em>
+        </span>
+      `;
+    } else {
+      elements.currentMilestone.innerHTML = `
+        <span class="milestone-icon">🏆</span>
+        <span class="milestone-text">
+          <strong>All milestones achieved!</strong>
+        </span>
+      `;
+    }
+  }
+
+  // Update progress bar
+  if (elements.milestoneProgressFill) {
+    elements.milestoneProgressFill.style.width = `${progress}%`;
+  }
+
+  // Update earned badges
+  if (elements.earnedBadges) {
+    const earnedMilestones = WRITING_MILESTONES.filter(m =>
+      state.writingStats.earnedBadges?.includes(m.name)
+    );
+
+    if (earnedMilestones.length === 0) {
+      elements.earnedBadges.innerHTML = `
+        <div class="no-badges">Start writing to earn your first badge!</div>
+      `;
+    } else {
+      elements.earnedBadges.innerHTML = earnedMilestones.map(m => `
+        <div class="badge-item" title="${m.description}">
+          <span class="badge-icon">${m.icon}</span>
+          <span class="badge-name">${m.name}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  // Update flywheel stats
+  if (elements.patternsLearnedCount) {
+    elements.patternsLearnedCount.textContent = state.writingStats.patternsLearned || 0;
+  }
+
+  if (elements.documentsAnalyzedCount) {
+    elements.documentsAnalyzedCount.textContent = state.writingStats.documentsAnalyzed || 0;
+  }
+
+  if (elements.improvementPercent) {
+    const improvement = state.writingStats.suggestionsReducedPercent || 0;
+    elements.improvementPercent.textContent = improvement > 0 ? `-${improvement}%` : '--';
+  }
+}
+
+// Format large numbers with commas
+function formatNumber(num) {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 // Update UI based on state
 function updateUI() {
   // Update setup progress
   updateSetupProgress();
+
+  // Update badges display
+  updateBadgesDisplay();
 
   // Update status indicator
   const isConfigured = state.settings.apiKey && state.voiceProfile.samples.length > 0;
@@ -657,6 +864,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           state.learnedExceptions = state.learnedExceptions.slice(-50);
           saveState();
           updateLearnedExceptions();
+
+          // Increment patterns learned
+          state.writingStats.patternsLearned++;
+          saveState();
+          updateBadgesDisplay();
         }
       }
       break;
@@ -666,6 +878,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         state.stats = { ...state.stats, ...message.stats };
         updateUI();
       }
+      break;
+
+    case 'WORDS_ADDED':
+      // Track words for badges/milestones
+      if (message.wordCount && message.wordCount > 0) {
+        state.writingStats.totalWords += message.wordCount;
+        state.writingStats.wordsThisWeek += message.wordCount;
+        state.writingStats.wordsThisMonth += message.wordCount;
+
+        // Check for new badges
+        const newBadge = checkForNewBadges();
+        if (newBadge) {
+          showToast(`🎖️ Badge earned: ${newBadge.name}!`, 'success');
+        }
+
+        saveState();
+        updateBadgesDisplay();
+      }
+      break;
+
+    case 'DOCUMENT_ANALYZED':
+      // Track documents analyzed for flywheel
+      state.writingStats.documentsAnalyzed++;
+      saveState();
+      updateBadgesDisplay();
+      break;
+
+    case 'PATTERN_LEARNED':
+      // Increment patterns learned counter
+      state.writingStats.patternsLearned++;
+      saveState();
+      updateBadgesDisplay();
       break;
   }
 });

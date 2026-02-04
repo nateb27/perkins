@@ -12,12 +12,24 @@
   let lastAnalyzedText = '';
   let analyzeTimeout = null;
   let currentSuggestions = [];
+  let currentDetections = null;
   let panel = null;
+
+  // Ambient learning state
+  let ambientLearningEnabled = false;
+  let typedCharCount = 0;
+  let lastAmbientLearnTime = 0;
+  let ambientLearnBuffer = '';
+  let isTyping = false;
+  let lastKeyTime = 0;
 
   // Configuration
   const DEBOUNCE_MS = 3000; // Wait 3 seconds after typing stops
   const MIN_TEXT_LENGTH = 50; // Minimum text to analyze
   const ANALYZE_COOLDOWN_MS = 10000; // Minimum time between analyses
+  const AMBIENT_LEARN_INTERVAL_MS = 300000; // Learn every 5 minutes of active typing
+  const AMBIENT_MIN_CHARS = 500; // Minimum chars typed before learning
+  const TYPING_TIMEOUT_MS = 2000; // Consider typing stopped after 2s
 
   let lastAnalyzeTime = 0;
 
@@ -38,6 +50,7 @@
     chrome.runtime.sendMessage({ type: 'GET_STATE' }, response => {
       if (response) {
         isEnabled = response.coachEnabled;
+        ambientLearningEnabled = response.settings?.ambientLearning || false;
         if (isEnabled) {
           startMonitoring();
         }
@@ -66,6 +79,13 @@
 
       case 'ANALYZE_RESULT':
         handleAnalysisResult(message.result);
+        break;
+
+      case 'SETTINGS_UPDATED':
+        // Update ambient learning setting
+        if (message.settings) {
+          ambientLearningEnabled = message.settings.ambientLearning || false;
+        }
         break;
     }
   }
@@ -189,7 +209,74 @@
     // Only trigger on actual text input
     if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete' || event.key === 'Enter') {
       scheduleAnalysis();
+
+      // Track typing for ambient learning
+      if (ambientLearningEnabled && event.key.length === 1) {
+        trackTypingForAmbientLearning(event.key);
+      }
     }
+  }
+
+  // Track typing for ambient learning
+  function trackTypingForAmbientLearning(key) {
+    const now = Date.now();
+
+    // Reset if it's been too long since last keystroke (likely copy-paste in between)
+    if (now - lastKeyTime > TYPING_TIMEOUT_MS && typedCharCount > 0) {
+      // Check if we should learn before resetting
+      maybePerformAmbientLearn();
+    }
+
+    lastKeyTime = now;
+    typedCharCount++;
+    isTyping = true;
+
+    // Set a timeout to detect when typing stops
+    setTimeout(() => {
+      if (Date.now() - lastKeyTime >= TYPING_TIMEOUT_MS) {
+        isTyping = false;
+        maybePerformAmbientLearn();
+      }
+    }, TYPING_TIMEOUT_MS);
+  }
+
+  // Check if we should perform ambient learning
+  function maybePerformAmbientLearn() {
+    const now = Date.now();
+
+    // Check conditions: enough chars typed, enough time passed
+    if (typedCharCount < AMBIENT_MIN_CHARS) {
+      return;
+    }
+
+    if (now - lastAmbientLearnTime < AMBIENT_LEARN_INTERVAL_MS) {
+      return;
+    }
+
+    // Get current document text
+    const text = extractDocumentText();
+    if (!text || text.length < 200) {
+      return;
+    }
+
+    console.log('Perkins: Performing ambient learning...', typedCharCount, 'chars typed');
+
+    // Send for learning
+    chrome.runtime.sendMessage({
+      type: 'AMBIENT_LEARN',
+      text: text,
+      typedCharCount: typedCharCount
+    }).then(response => {
+      if (response && response.success) {
+        showTemporaryMessage('Voice profile updated from your writing!');
+      }
+    }).catch(err => {
+      console.error('Perkins: Ambient learning failed', err);
+    });
+
+    // Reset counters
+    lastAmbientLearnTime = now;
+    typedCharCount = 0;
   }
 
   function scheduleAnalysis() {
@@ -257,6 +344,7 @@
     }
 
     currentSuggestions = result.suggestions || [];
+    currentDetections = result.detections || null;
     updatePanel();
   }
 
@@ -288,9 +376,17 @@
           <span class="perkins-review-icon">📖</span>
           Review Document
         </button>
+        <button class="perkins-btn perkins-btn-chat" title="Chat about your writing">
+          <span class="perkins-chat-icon">💬</span>
+          Chat
+        </button>
+        <button class="perkins-btn perkins-btn-write" title="Write in your voice">
+          <span class="perkins-write-icon">✍️</span>
+          Write for me
+        </button>
         <button class="perkins-btn perkins-btn-learn" title="Add this document to your voice profile">
           <span class="perkins-learn-icon">📝</span>
-          Learn from this doc
+          Learn
         </button>
       </div>
     `;
@@ -301,6 +397,8 @@
     panel.querySelector('.perkins-btn-minimize').addEventListener('click', toggleMinimize);
     panel.querySelector('.perkins-btn-close').addEventListener('click', disableCoach);
     panel.querySelector('.perkins-btn-review').addEventListener('click', openReviewModal);
+    panel.querySelector('.perkins-btn-chat').addEventListener('click', openChatModal);
+    panel.querySelector('.perkins-btn-write').addEventListener('click', openWriteModal);
     panel.querySelector('.perkins-btn-learn').addEventListener('click', learnFromDocument);
 
     // Initially hidden
@@ -396,7 +494,62 @@
     const content = panel?.querySelector('.perkins-panel-content');
     if (!content) return;
 
-    if (currentSuggestions.length === 0) {
+    // Build detection warnings HTML
+    let detectionsHtml = '';
+    if (currentDetections) {
+      const aiScore = currentDetections.aiScore || 0;
+      const genericScore = currentDetections.genericScore || 0;
+
+      if (aiScore >= 40 || genericScore >= 40) {
+        detectionsHtml = '<div class="perkins-detections">';
+
+        if (aiScore >= 40) {
+          const aiLevel = aiScore >= 70 ? 'high' : 'medium';
+          const aiIndicators = currentDetections.aiIndicators || [];
+          detectionsHtml += `
+            <div class="perkins-detection perkins-detection-ai perkins-detection-${aiLevel}">
+              <div class="perkins-detection-header">
+                <span class="perkins-detection-icon">🤖</span>
+                <span class="perkins-detection-title">AI Detected (${aiScore}%)</span>
+              </div>
+              <div class="perkins-detection-text">
+                This text sounds AI-generated, not like you.
+              </div>
+              ${aiIndicators.length > 0 ? `
+                <div class="perkins-detection-indicators">
+                  ${aiIndicators.slice(0, 3).map(i => `<span class="perkins-indicator">"${escapeHtml(i)}"</span>`).join('')}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }
+
+        if (genericScore >= 40) {
+          const genericLevel = genericScore >= 70 ? 'high' : 'medium';
+          const genericIndicators = currentDetections.genericIndicators || [];
+          detectionsHtml += `
+            <div class="perkins-detection perkins-detection-generic perkins-detection-${genericLevel}">
+              <div class="perkins-detection-header">
+                <span class="perkins-detection-icon">📋</span>
+                <span class="perkins-detection-title">Generic Writing (${genericScore}%)</span>
+              </div>
+              <div class="perkins-detection-text">
+                This sounds Grammarly-fied. Where's your voice?
+              </div>
+              ${genericIndicators.length > 0 ? `
+                <div class="perkins-detection-indicators">
+                  ${genericIndicators.slice(0, 3).map(i => `<span class="perkins-indicator">"${escapeHtml(i)}"</span>`).join('')}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }
+
+        detectionsHtml += '</div>';
+      }
+    }
+
+    if (currentSuggestions.length === 0 && !detectionsHtml) {
       content.innerHTML = `
         <div class="perkins-panel-status perkins-success">
           <span class="perkins-status-icon">✨</span>
@@ -420,12 +573,15 @@
     `).join('');
 
     content.innerHTML = `
-      <div class="perkins-suggestions-header">
-        <span>${currentSuggestions.length} suggestion${currentSuggestions.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div class="perkins-suggestions-list">
-        ${suggestionsHtml}
-      </div>
+      ${detectionsHtml}
+      ${currentSuggestions.length > 0 ? `
+        <div class="perkins-suggestions-header">
+          <span>${currentSuggestions.length} suggestion${currentSuggestions.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div class="perkins-suggestions-list">
+          ${suggestionsHtml}
+        </div>
+      ` : ''}
     `;
 
     // Bind action buttons
@@ -1025,6 +1181,343 @@
   function closeReviewModal() {
     if (reviewModal) {
       reviewModal.classList.remove('perkins-review-visible');
+    }
+  }
+
+  // ============================================
+  // Chat Modal - Conversational editing
+  // ============================================
+
+  let chatModal = null;
+  let chatHistory = [];
+
+  function createChatModal() {
+    if (chatModal) return;
+
+    chatModal = document.createElement('div');
+    chatModal.id = 'perkins-chat-modal';
+    chatModal.innerHTML = `
+      <div class="perkins-chat-overlay"></div>
+      <div class="perkins-chat-container">
+        <div class="perkins-chat-header">
+          <div class="perkins-chat-title">
+            <span class="perkins-logo-icon">P</span>
+            <span>Chat with Perkins</span>
+          </div>
+          <button class="perkins-btn-close-chat" title="Close">×</button>
+        </div>
+        <div class="perkins-chat-context">
+          <span class="perkins-context-label">Context:</span>
+          <span class="perkins-context-text">Current document</span>
+        </div>
+        <div class="perkins-chat-messages" id="perkins-chat-messages">
+          <div class="perkins-chat-welcome">
+            <p>Ask me anything about your writing!</p>
+            <div class="perkins-chat-suggestions">
+              <button class="perkins-suggestion-chip">Why did you suggest that change?</button>
+              <button class="perkins-suggestion-chip">What's my writing style?</button>
+              <button class="perkins-suggestion-chip">Make this paragraph punchier</button>
+              <button class="perkins-suggestion-chip">Help me with the opening</button>
+            </div>
+          </div>
+        </div>
+        <div class="perkins-chat-input-area">
+          <textarea id="perkins-chat-input" placeholder="Type your message..." rows="2"></textarea>
+          <button class="perkins-btn perkins-btn-send" id="perkins-chat-send">
+            <span>Send</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(chatModal);
+
+    // Event listeners
+    chatModal.querySelector('.perkins-chat-overlay').addEventListener('click', closeChatModal);
+    chatModal.querySelector('.perkins-btn-close-chat').addEventListener('click', closeChatModal);
+    chatModal.querySelector('#perkins-chat-send').addEventListener('click', sendChatMessage);
+
+    // Enter to send
+    chatModal.querySelector('#perkins-chat-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+    // Suggestion chips
+    chatModal.querySelectorAll('.perkins-suggestion-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        chatModal.querySelector('#perkins-chat-input').value = chip.textContent;
+        sendChatMessage();
+      });
+    });
+  }
+
+  function openChatModal() {
+    createChatModal();
+    chatModal.classList.add('perkins-chat-visible');
+
+    // Update context with current selection or paragraph
+    const selection = window.getSelection();
+    let contextText = 'Current document';
+
+    if (selection && selection.toString().trim().length > 0) {
+      contextText = `Selected: "${truncateText(selection.toString(), 50)}"`;
+    } else {
+      const paragraph = getCurrentParagraph();
+      if (paragraph && paragraph.length > 0) {
+        contextText = `Current paragraph: "${truncateText(paragraph, 50)}"`;
+      }
+    }
+
+    chatModal.querySelector('.perkins-context-text').textContent = contextText;
+
+    // Focus input
+    setTimeout(() => {
+      chatModal.querySelector('#perkins-chat-input').focus();
+    }, 100);
+  }
+
+  function closeChatModal() {
+    if (chatModal) {
+      chatModal.classList.remove('perkins-chat-visible');
+    }
+  }
+
+  async function sendChatMessage() {
+    const input = chatModal.querySelector('#perkins-chat-input');
+    const message = input.value.trim();
+
+    if (!message) return;
+
+    // Clear input
+    input.value = '';
+
+    // Get context
+    const selection = window.getSelection();
+    let context = '';
+
+    if (selection && selection.toString().trim().length > 0) {
+      context = selection.toString();
+    } else {
+      context = getCurrentParagraph();
+    }
+
+    // Add user message to chat
+    addChatMessage('user', message);
+
+    // Show loading
+    const loadingId = addChatMessage('assistant', '...', true);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'CHAT_MESSAGE',
+        message: message,
+        context: context,
+        history: chatHistory.slice(-6) // Last 3 exchanges
+      });
+
+      // Remove loading
+      removeChatMessage(loadingId);
+
+      if (response.error) {
+        addChatMessage('assistant', `Error: ${response.error}`);
+      } else {
+        addChatMessage('assistant', response.reply);
+
+        // Store in history
+        chatHistory.push({ role: 'user', content: message });
+        chatHistory.push({ role: 'assistant', content: response.reply });
+
+        // Keep history manageable
+        if (chatHistory.length > 20) {
+          chatHistory = chatHistory.slice(-20);
+        }
+      }
+    } catch (err) {
+      removeChatMessage(loadingId);
+      addChatMessage('assistant', 'Failed to send message. Please try again.');
+      console.error('Chat error:', err);
+    }
+  }
+
+  function addChatMessage(role, content, isLoading = false) {
+    const messagesContainer = chatModal.querySelector('#perkins-chat-messages');
+
+    // Hide welcome message
+    const welcome = messagesContainer.querySelector('.perkins-chat-welcome');
+    if (welcome) {
+      welcome.style.display = 'none';
+    }
+
+    const messageDiv = document.createElement('div');
+    const id = 'msg-' + Date.now();
+    messageDiv.id = id;
+    messageDiv.className = `perkins-chat-message perkins-chat-${role}`;
+
+    if (isLoading) {
+      messageDiv.classList.add('perkins-chat-loading');
+      messageDiv.innerHTML = '<span class="perkins-typing-indicator">●●●</span>';
+    } else {
+      messageDiv.textContent = content;
+    }
+
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    return id;
+  }
+
+  function removeChatMessage(id) {
+    const msg = chatModal.querySelector(`#${id}`);
+    if (msg) {
+      msg.remove();
+    }
+  }
+
+  // ============================================
+  // Write For Me Modal - Generate in voice
+  // ============================================
+
+  let writeModal = null;
+
+  function createWriteModal() {
+    if (writeModal) return;
+
+    writeModal = document.createElement('div');
+    writeModal.id = 'perkins-write-modal';
+    writeModal.innerHTML = `
+      <div class="perkins-write-overlay"></div>
+      <div class="perkins-write-container">
+        <div class="perkins-write-header">
+          <div class="perkins-write-title">
+            <span class="perkins-logo-icon">P</span>
+            <span>Write Like Me</span>
+          </div>
+          <button class="perkins-btn-close-write" title="Close">×</button>
+        </div>
+        <div class="perkins-write-body">
+          <div class="perkins-write-input-section">
+            <label>What do you want to write?</label>
+            <textarea id="perkins-write-prompt" placeholder="e.g., An email declining a meeting politely, A tweet about launching our new feature, An intro paragraph for my blog post about AI..." rows="4"></textarea>
+            <div class="perkins-write-options">
+              <label class="perkins-write-option">
+                <input type="radio" name="write-length" value="short" checked>
+                <span>Short</span>
+              </label>
+              <label class="perkins-write-option">
+                <input type="radio" name="write-length" value="medium">
+                <span>Medium</span>
+              </label>
+              <label class="perkins-write-option">
+                <input type="radio" name="write-length" value="long">
+                <span>Long</span>
+              </label>
+            </div>
+            <button class="perkins-btn perkins-btn-primary perkins-btn-generate" id="perkins-generate-btn">
+              ✍️ Generate in My Voice
+            </button>
+          </div>
+          <div class="perkins-write-output-section" style="display: none;">
+            <label>Generated text:</label>
+            <div class="perkins-write-output" id="perkins-write-output"></div>
+            <div class="perkins-write-actions">
+              <button class="perkins-btn perkins-btn-copy">Copy</button>
+              <button class="perkins-btn perkins-btn-insert">Insert at Cursor</button>
+              <button class="perkins-btn perkins-btn-regenerate">Regenerate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(writeModal);
+
+    // Event listeners
+    writeModal.querySelector('.perkins-write-overlay').addEventListener('click', closeWriteModal);
+    writeModal.querySelector('.perkins-btn-close-write').addEventListener('click', closeWriteModal);
+    writeModal.querySelector('#perkins-generate-btn').addEventListener('click', generateInVoice);
+    writeModal.querySelector('.perkins-btn-copy').addEventListener('click', copyGeneratedText);
+    writeModal.querySelector('.perkins-btn-insert').addEventListener('click', insertGeneratedText);
+    writeModal.querySelector('.perkins-btn-regenerate').addEventListener('click', generateInVoice);
+  }
+
+  function openWriteModal() {
+    createWriteModal();
+    writeModal.classList.add('perkins-write-visible');
+
+    // Reset state
+    writeModal.querySelector('#perkins-write-prompt').value = '';
+    writeModal.querySelector('.perkins-write-output-section').style.display = 'none';
+    writeModal.querySelector('.perkins-write-input-section').style.display = 'block';
+
+    // Focus input
+    setTimeout(() => {
+      writeModal.querySelector('#perkins-write-prompt').focus();
+    }, 100);
+  }
+
+  function closeWriteModal() {
+    if (writeModal) {
+      writeModal.classList.remove('perkins-write-visible');
+    }
+  }
+
+  let lastGeneratedText = '';
+
+  async function generateInVoice() {
+    const prompt = writeModal.querySelector('#perkins-write-prompt').value.trim();
+    if (!prompt) {
+      showTemporaryMessage('Please describe what you want to write.');
+      return;
+    }
+
+    const length = writeModal.querySelector('input[name="write-length"]:checked').value;
+
+    const btn = writeModal.querySelector('#perkins-generate-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Generating...';
+    btn.disabled = true;
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'GENERATE_IN_VOICE',
+        prompt: prompt,
+        length: length
+      });
+
+      if (response.error) {
+        showTemporaryMessage(response.error);
+      } else {
+        lastGeneratedText = response.text;
+        writeModal.querySelector('#perkins-write-output').textContent = response.text;
+        writeModal.querySelector('.perkins-write-output-section').style.display = 'block';
+      }
+    } catch (err) {
+      console.error('Generate error:', err);
+      showTemporaryMessage('Failed to generate. Please try again.');
+    }
+
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+
+  function copyGeneratedText() {
+    if (lastGeneratedText) {
+      navigator.clipboard.writeText(lastGeneratedText).then(() => {
+        showTemporaryMessage('Copied to clipboard!');
+      });
+    }
+  }
+
+  function insertGeneratedText() {
+    if (lastGeneratedText) {
+      // Copy to clipboard and instruct user
+      navigator.clipboard.writeText(lastGeneratedText).then(() => {
+        closeWriteModal();
+        showTemporaryMessage('Text copied! Press Ctrl+V to paste at cursor.');
+      });
     }
   }
 

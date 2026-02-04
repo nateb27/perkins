@@ -75,6 +75,53 @@
             <p>No suggestions yet. Start writing in Google Docs and I'll help you stay on-voice.</p>
           </div>
         </div>
+
+        <!-- Badges & Milestones -->
+        <div class="badges-section" id="badges-section">
+          <h3>Writing Journey</h3>
+
+          <div class="milestone-tracker">
+            <div class="total-words">
+              <span class="total-words-label">Total words written</span>
+              <span class="total-words-count" id="total-words-count">0</span>
+            </div>
+
+            <div class="current-milestone" id="current-milestone">
+              <span class="milestone-icon">📜</span>
+              <span class="milestone-text">
+                <strong>272</strong> words to <em>Gettysburg Address</em>
+              </span>
+            </div>
+
+            <div class="milestone-progress" id="milestone-progress">
+              <div class="milestone-progress-fill" id="milestone-progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="earned-badges" id="earned-badges">
+            <div class="no-badges">Start writing to earn your first badge!</div>
+          </div>
+        </div>
+
+        <!-- Flywheel Stats -->
+        <div class="flywheel-section" id="flywheel-stats">
+          <h3>Perkins is Learning</h3>
+          <div class="flywheel-stats-grid">
+            <div class="flywheel-stat">
+              <span class="flywheel-stat-value" id="patterns-learned-count">0</span>
+              <span class="flywheel-stat-label">Patterns learned</span>
+            </div>
+            <div class="flywheel-stat">
+              <span class="flywheel-stat-value" id="documents-analyzed-count">0</span>
+              <span class="flywheel-stat-label">Docs analyzed</span>
+            </div>
+            <div class="flywheel-stat">
+              <span class="flywheel-stat-value" id="improvement-percent">--</span>
+              <span class="flywheel-stat-label">Fewer suggestions</span>
+            </div>
+          </div>
+          <p class="flywheel-tagline">The longer you use Perkins, the smarter it gets.</p>
+        </div>
       </div>
     </section>
 
@@ -234,6 +281,20 @@
             <span class="checkbox-text">Catch typos and grammar mistakes</span>
           </label>
           <span class="setting-hint">Only flags genuine mistakes, not your intentional style choices.</span>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <h3>Ambient Learning <span class="badge">New</span></h3>
+        <p class="instruction">Let Perkins learn from your writing as you type. Your voice profile improves automatically.</p>
+
+        <div class="setting-group">
+          <label class="checkbox">
+            <input type="checkbox" id="ambient-learning">
+            <span class="checkbox-mark"></span>
+            <span class="checkbox-text">Learn from my writing automatically</span>
+          </label>
+          <span class="setting-hint">Perkins will periodically sample your writing to refine your voice profile. Only original typing is captured, not copy-pasted content.</span>
         </div>
 
         <div class="settings-divider"></div>
