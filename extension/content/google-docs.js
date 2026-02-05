@@ -119,6 +119,37 @@
     }
   }
 
+  // UI text patterns to filter out (Gemini, tooltips, etc.)
+  const UI_TEXT_PATTERNS = [
+    /^Gemini created these notes/i,
+    /They can contain errors so should be double-checked/i,
+    /How Gemini takes notes/i,
+    /Drag image to reposition/i,
+    /^\d+ of \d+$/,  // "1 of 2" pagination
+    /^Loading/i,
+    /^Saving/i,
+  ];
+
+  function isUIText(text) {
+    if (!text) return true;
+    const trimmed = text.trim();
+    if (trimmed.length < 3) return true;
+    return UI_TEXT_PATTERNS.some(pattern => pattern.test(trimmed));
+  }
+
+  function cleanExtractedText(text) {
+    if (!text) return '';
+    // Split into lines and filter out UI text
+    const lines = text.split('\n');
+    const cleanedLines = lines.filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+      if (isUIText(trimmed)) return false;
+      return true;
+    });
+    return cleanedLines.join('\n');
+  }
+
   // Text extraction from Google Docs
   function extractDocumentText() {
     // Target ONLY the document pages/canvas, not sidebars or UI elements
@@ -128,6 +159,9 @@
     if (pages.length > 0) {
       const textParts = [];
       pages.forEach(page => {
+        // Skip if this page is inside a sidebar or panel
+        if (page.closest('.docs-side-panel, .companion-panel, .docs-explore-widget, [role="complementary"]')) return;
+
         // Try multiple selectors for line content
         const lines = page.querySelectorAll('.kix-lineview');
         if (lines.length > 0) {
@@ -139,19 +173,19 @@
               spans.forEach(span => {
                 lineText += span.textContent;
               });
-              if (lineText.trim()) {
+              if (lineText.trim() && !isUIText(lineText)) {
                 textParts.push(lineText);
               }
             } else {
               // Fallback to line text content
               const text = line.textContent?.trim();
-              if (text) textParts.push(text);
+              if (text && !isUIText(text)) textParts.push(text);
             }
           });
         }
       });
       if (textParts.length > 0) {
-        return textParts.join('\n');
+        return cleanExtractedText(textParts.join('\n'));
       }
     }
 
@@ -163,39 +197,35 @@
         const paragraphTexts = [];
         paragraphs.forEach(p => {
           // Skip if parent is a sidebar or panel
-          if (p.closest('.docs-side-panel') || p.closest('.companion-panel') || p.closest('.docs-explore-widget')) return;
+          if (p.closest('.docs-side-panel, .companion-panel, .docs-explore-widget, [role="complementary"]')) return;
           const text = p.textContent?.trim();
-          if (text) paragraphTexts.push(text);
+          if (text && !isUIText(text)) paragraphTexts.push(text);
         });
         if (paragraphTexts.length > 0) {
-          return paragraphTexts.join('\n');
+          return cleanExtractedText(paragraphTexts.join('\n'));
         }
       }
     }
 
-    // Method 3: Try the editor canvas directly
+    // Method 3: Try the editor canvas directly (more aggressive filtering)
     const canvas = document.querySelector('.kix-appview-editor');
     if (canvas) {
       // Get all text content but exclude known UI elements
       const clone = canvas.cloneNode(true);
-      // Remove sidebars and toolbars from clone
-      clone.querySelectorAll('.docs-side-panel, .companion-panel, .docs-explore-widget, .kix-appview-editor-ruler').forEach(el => el.remove());
+      // Remove sidebars, toolbars, Gemini panels, tooltips
+      clone.querySelectorAll(`
+        .docs-side-panel,
+        .companion-panel,
+        .docs-explore-widget,
+        .kix-appview-editor-ruler,
+        [role="complementary"],
+        [role="tooltip"],
+        [aria-label*="Gemini"],
+        .docs-material-gm-popup
+      `.replace(/\s+/g, '')).forEach(el => el.remove());
       const text = clone.textContent?.trim();
       if (text && text.length > 10) {
-        return text;
-      }
-    }
-
-    // Method 4: Last resort - try contenteditable areas
-    const editables = document.querySelectorAll('[contenteditable="true"]');
-    for (const el of editables) {
-      // Skip small elements (likely inputs)
-      if (el.offsetHeight < 100) continue;
-      // Skip if in sidebar
-      if (el.closest('.docs-side-panel') || el.closest('.companion-panel')) continue;
-      const text = el.textContent?.trim();
-      if (text && text.length > 20) {
-        return text;
+        return cleanExtractedText(text);
       }
     }
 

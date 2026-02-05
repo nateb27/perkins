@@ -939,6 +939,9 @@ function sanitizeText(text) {
 
 // Full document review for side-by-side view
 async function reviewDocument(text) {
+  // Ensure we have latest state (worker may have been idle)
+  await loadState();
+
   if (!settings?.apiKey) {
     return { error: 'No API key configured' };
   }
