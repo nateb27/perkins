@@ -122,31 +122,40 @@
   // Text extraction from Google Docs
   function extractDocumentText() {
     // Target ONLY the document pages/canvas, not sidebars or UI elements
-    // The actual document content is inside .kix-page elements
 
-    // Method 1: Get text from document pages only (most reliable)
+    // Method 1: Get text from .kix-page elements (most reliable for rendered content)
     const pages = document.querySelectorAll('.kix-page');
     if (pages.length > 0) {
       const textParts = [];
       pages.forEach(page => {
+        // Try multiple selectors for line content
         const lines = page.querySelectorAll('.kix-lineview');
-        lines.forEach(line => {
-          const spans = line.querySelectorAll('.kix-wordhtmlgenerator-word-node');
-          let lineText = '';
-          spans.forEach(span => {
-            lineText += span.textContent;
+        if (lines.length > 0) {
+          lines.forEach(line => {
+            // Try word nodes first
+            const spans = line.querySelectorAll('.kix-wordhtmlgenerator-word-node');
+            if (spans.length > 0) {
+              let lineText = '';
+              spans.forEach(span => {
+                lineText += span.textContent;
+              });
+              if (lineText.trim()) {
+                textParts.push(lineText);
+              }
+            } else {
+              // Fallback to line text content
+              const text = line.textContent?.trim();
+              if (text) textParts.push(text);
+            }
           });
-          if (lineText.trim()) {
-            textParts.push(lineText);
-          }
-        });
+        }
       });
       if (textParts.length > 0) {
         return textParts.join('\n');
       }
     }
 
-    // Method 2: Try .kix-paragraphrenderer inside pages only
+    // Method 2: Try .kix-paragraphrenderer (paragraph-level extraction)
     const pageContainer = document.querySelector('.kix-paginateddocumentplugin');
     if (pageContainer) {
       const paragraphs = pageContainer.querySelectorAll('.kix-paragraphrenderer');
@@ -154,7 +163,7 @@
         const paragraphTexts = [];
         paragraphs.forEach(p => {
           // Skip if parent is a sidebar or panel
-          if (p.closest('.docs-side-panel') || p.closest('.companion-panel')) return;
+          if (p.closest('.docs-side-panel') || p.closest('.companion-panel') || p.closest('.docs-explore-widget')) return;
           const text = p.textContent?.trim();
           if (text) paragraphTexts.push(text);
         });
@@ -164,11 +173,30 @@
       }
     }
 
-    // Method 3: Fallback - try the canvas area only
-    const canvas = document.querySelector('.kix-appview-editor .kix-rotatingtilemanager');
+    // Method 3: Try the editor canvas directly
+    const canvas = document.querySelector('.kix-appview-editor');
     if (canvas) {
-      const text = canvas.textContent?.trim();
-      if (text) return text;
+      // Get all text content but exclude known UI elements
+      const clone = canvas.cloneNode(true);
+      // Remove sidebars and toolbars from clone
+      clone.querySelectorAll('.docs-side-panel, .companion-panel, .docs-explore-widget, .kix-appview-editor-ruler').forEach(el => el.remove());
+      const text = clone.textContent?.trim();
+      if (text && text.length > 10) {
+        return text;
+      }
+    }
+
+    // Method 4: Last resort - try contenteditable areas
+    const editables = document.querySelectorAll('[contenteditable="true"]');
+    for (const el of editables) {
+      // Skip small elements (likely inputs)
+      if (el.offsetHeight < 100) continue;
+      // Skip if in sidebar
+      if (el.closest('.docs-side-panel') || el.closest('.companion-panel')) continue;
+      const text = el.textContent?.trim();
+      if (text && text.length > 20) {
+        return text;
+      }
     }
 
     console.log('Perkins: Could not extract document text');
