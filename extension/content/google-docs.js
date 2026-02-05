@@ -23,9 +23,9 @@
   let lastKeyTime = 0;
 
   // Configuration
-  const DEBOUNCE_MS = 3000; // Wait 3 seconds after typing stops
+  const DEBOUNCE_MS = 1500; // Wait 1.5 seconds after typing stops
   const MIN_TEXT_LENGTH = 50; // Minimum text to analyze
-  const ANALYZE_COOLDOWN_MS = 10000; // Minimum time between analyses
+  const ANALYZE_COOLDOWN_MS = 5000; // Minimum time between analyses
   const AMBIENT_LEARN_INTERVAL_MS = 300000; // Learn every 5 minutes of active typing
   const AMBIENT_MIN_CHARS = 500; // Minimum chars typed before learning
   const TYPING_TIMEOUT_MS = 2000; // Consider typing stopped after 2s
@@ -588,6 +588,16 @@
   function showPanel() {
     if (panel) {
       panel.classList.remove('perkins-hidden');
+
+      // Instant feedback: show local metrics immediately
+      const text = extractDocumentText();
+      if (text && text.length >= MIN_TEXT_LENGTH) {
+        const metrics = calculateLocalMetrics(text);
+        showLocalMetrics(metrics);
+
+        // Trigger analysis immediately (bypass debounce for panel open)
+        performAnalysis();
+      }
     }
   }
 
@@ -824,6 +834,58 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Calculate local metrics (no API needed - instant feedback)
+  function calculateLocalMetrics(text) {
+    if (!text) return null;
+
+    const words = text.trim().split(/\s+/).filter(w => w.length > 0);
+    const wordCount = words.length;
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentenceCount = sentences.length;
+    const avgWordsPerSentence = sentenceCount > 0 ? Math.round(wordCount / sentenceCount) : 0;
+    const readingTimeMin = Math.max(1, Math.round(wordCount / 200)); // ~200 wpm reading speed
+
+    return {
+      wordCount,
+      sentenceCount,
+      avgWordsPerSentence,
+      readingTimeMin
+    };
+  }
+
+  // Show instant local metrics in panel
+  function showLocalMetrics(metrics) {
+    const content = panel?.querySelector('.perkins-panel-content');
+    if (!content || !metrics) return;
+
+    content.innerHTML = `
+      <div class="perkins-instant-metrics">
+        <div class="perkins-metrics-row">
+          <span class="perkins-metric">
+            <span class="perkins-metric-value">${metrics.wordCount}</span>
+            <span class="perkins-metric-label">words</span>
+          </span>
+          <span class="perkins-metric">
+            <span class="perkins-metric-value">${metrics.sentenceCount}</span>
+            <span class="perkins-metric-label">sentences</span>
+          </span>
+          <span class="perkins-metric">
+            <span class="perkins-metric-value">${metrics.avgWordsPerSentence}</span>
+            <span class="perkins-metric-label">words/sentence</span>
+          </span>
+          <span class="perkins-metric">
+            <span class="perkins-metric-value">${metrics.readingTimeMin}</span>
+            <span class="perkins-metric-label">min read</span>
+          </span>
+        </div>
+        <div class="perkins-analyzing-hint">
+          <span class="perkins-spinner-small"></span>
+          Analyzing voice...
+        </div>
+      </div>
+    `;
   }
 
   // Side-by-side review modal

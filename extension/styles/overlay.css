@@ -1731,3 +1731,63 @@
   color: #22c55e;
   font-size: 18px;
 }
+
+/* ========================================
+   Instant Metrics (Time to Impact)
+   ======================================== */
+
+.perkins-instant-metrics {
+  padding: 16px;
+}
+
+.perkins-metrics-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.perkins-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  padding: 8px 4px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.perkins-metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a3a32;
+}
+
+.perkins-metric-label {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+.perkins-analyzing-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: #f0f9f6;
+  border-radius: 6px;
+  color: #1a3a32;
+  font-size: 12px;
+}
+
+.perkins-spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #1a3a32;
+  border-radius: 50%;
+  animation: perkins-spin 0.8s linear infinite;
+}
