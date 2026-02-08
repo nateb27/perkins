@@ -128,6 +128,30 @@
   background: #f0fdf4;
 }
 
+/* Post-feedback actions (Analyze Again, etc.) */
+.perkins-post-feedback {
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px 12px;
+}
+
+.perkins-btn-reanalyze {
+  background: #f0fdf4;
+  color: #1a3a32;
+  border: 1px solid #e8e4de;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.perkins-btn-reanalyze:hover {
+  background: #e8e4de;
+  border-color: #1a3a32;
+}
+
 .perkins-panel-status.perkins-error {
   color: #ef4444;
   background: #fef2f2;

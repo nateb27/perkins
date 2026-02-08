@@ -510,6 +510,55 @@ async function importFromUrl(url) {
   }
 }
 
+// Build a feedback context string from past accept/reject history.
+// This lets the AI learn which kinds of suggestions the user finds helpful vs not.
+async function buildFeedbackContext() {
+  try {
+    const stored = await chrome.storage.local.get(['feedback']);
+    const feedback = stored.feedback || [];
+    if (feedback.length === 0) return '';
+
+    // Separate accepted vs rejected and take the most recent of each
+    const accepted = feedback.filter(f => f.accepted).slice(-5);
+    const rejected = feedback.filter(f => !f.accepted).slice(-5);
+
+    let section = '\nFEEDBACK HISTORY (learn from the user\'s past reactions):\n';
+
+    if (accepted.length > 0) {
+      section += 'Suggestions the user ACCEPTED (make more like these):\n';
+      for (const f of accepted) {
+        section += `- "${f.original}" → "${f.suggestion}" (${f.reason || 'no reason'})\n`;
+      }
+    }
+
+    if (rejected.length > 0) {
+      section += 'Suggestions the user REJECTED (avoid suggestions like these):\n';
+      for (const f of rejected) {
+        section += `- "${f.original}" → "${f.suggestion}" (${f.reason || 'no reason'}) — USER DID NOT FIND THIS HELPFUL\n`;
+      }
+    }
+
+    // Summarize the accept/reject ratio
+    const totalAccepted = feedback.filter(f => f.accepted).length;
+    const totalRejected = feedback.filter(f => !f.accepted).length;
+    const total = totalAccepted + totalRejected;
+    if (total >= 5) {
+      const acceptRate = Math.round((totalAccepted / total) * 100);
+      section += `\nOverall: ${acceptRate}% of suggestions accepted (${totalAccepted}/${total}). `;
+      if (acceptRate < 40) {
+        section += 'The user rejects most suggestions — be MORE conservative and only flag clear issues.\n';
+      } else if (acceptRate > 75) {
+        section += 'The user accepts most suggestions — current sensitivity is good.\n';
+      }
+    }
+
+    return section;
+  } catch (err) {
+    console.error('Perkins: Failed to build feedback context', err);
+    return '';
+  }
+}
+
 // Analyze text for off-voice moments
 async function analyzeText(text, context = {}) {
   // Ensure we have latest state (worker may have been idle)
@@ -559,6 +608,9 @@ async function analyzeText(text, context = {}) {
     ? `\nLEARNED EXCEPTIONS (patterns the user has confirmed are intentional - DO NOT flag these):\n${learnedExceptions.map(e => `- "${e.pattern}"`).join('\n')}\n`
     : '';
 
+  // Build feedback history section so the AI learns from past accept/reject patterns
+  const feedbackSection = await buildFeedbackContext();
+
   // Build grammar instruction
   const grammarInstruction = settings.checks?.grammar
     ? `
@@ -573,7 +625,7 @@ ${voiceProfile.summary}
 
 SAMPLE WRITINGS (this is how they naturally write):
 ${voiceProfile.samples.slice(0, 3).map(s => `"${s.text.substring(0, 200)}..."`).join('\n')}
-${styleGuideSection}${exceptionsSection}
+${styleGuideSection}${exceptionsSection}${feedbackSection}
 COACHING INTENSITY: ${settings.intensity}
 ${intensityGuide[settings.intensity] || intensityGuide.balanced}
 ${grammarInstruction}

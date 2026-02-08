@@ -373,8 +373,15 @@
     panel.querySelector('.perkins-gmail-loading').style.display = 'none';
     panel.querySelector('.perkins-gmail-suggestions').style.display = 'none';
     const empty = panel.querySelector('.perkins-gmail-empty');
-    empty.innerHTML = `<div style="font-size: 24px; margin-bottom: 8px;">✓</div>${message}`;
+    empty.innerHTML = `<div style="font-size: 24px; margin-bottom: 8px;">✓</div>${escapeHtml(message)}`;
     empty.style.display = 'block';
+
+    // Auto-return to watching state after 4 seconds
+    setTimeout(() => {
+      if (empty.style.display === 'block') {
+        empty.innerHTML = `<div style="font-size: 24px; margin-bottom: 8px;">👀</div>Watching your email...`;
+      }
+    }, 4000);
   }
 
   function showError(panel, message) {

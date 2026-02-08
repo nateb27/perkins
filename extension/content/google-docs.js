@@ -120,15 +120,54 @@
   }
 
   // UI text patterns to filter out (Gemini, tooltips, etc.)
+  // These are substring matches (no ^ anchoring) so they work even when
+  // UI chrome text is concatenated with document text in the DOM.
   const UI_TEXT_PATTERNS = [
-    /^Gemini created these notes/i,
+    /Gemini created these notes/i,
     /They can contain errors so should be double-checked/i,
     /How Gemini takes notes/i,
     /Drag image to reposition/i,
-    /^\d+ of \d+$/,  // "1 of 2" pagination
-    /^Loading/i,
-    /^Saving/i,
+    /^\d+ of \d+$/,  // "1 of 2" pagination (keep anchored -- this is short)
+    /^Loading\.{0,3}$/i,
+    /^Saving\.{0,3}$/i,
   ];
+
+  // Broader UI chrome phrases that should be stripped from extracted text.
+  // These are used for substring removal, not line-level filtering.
+  const UI_TEXT_SUBSTRINGS = [
+    'Gemini created these notes',
+    'They can contain errors so should be double-checked',
+    'How Gemini takes notes',
+    'Drag image to reposition',
+    'Explore with Gemini',
+    'Take notes with Gemini',
+    'Gemini is thinking',
+    'Gemini can make mistakes',
+    'undo',  // trailing undo button label from Gemini panel
+  ];
+
+  // Selectors for UI elements that should never be read as document content.
+  const UI_ELEMENT_SELECTORS = [
+    '.docs-side-panel',
+    '.companion-panel',
+    '.docs-explore-widget',
+    '[role="complementary"]',
+    '[role="tooltip"]',
+    '[role="dialog"]',
+    '[role="alertdialog"]',
+    '[aria-label*="Gemini"]',
+    '[data-tooltip]',
+    '.docs-material-gm-popup',
+    '.kix-appview-editor-ruler',
+    '.navigation-widget-hat',
+    '.docs-gm-side-panel',
+    '.docs-companion-panel',
+    '.scb-container',           // Gemini side container
+    '.docs-explore-container',
+    '#docs-gemini-plus',
+    '.docs-butterbar',
+    '.docs-revisions-loadingscreen',
+  ].join(',');
 
   function isUIText(text) {
     if (!text) return true;
@@ -137,10 +176,26 @@
     return UI_TEXT_PATTERNS.some(pattern => pattern.test(trimmed));
   }
 
+  // Remove known UI chrome substrings from text, even when they appear
+  // inline without line breaks (which is common with DOM textContent).
+  function stripUISubstrings(text) {
+    if (!text) return '';
+    let cleaned = text;
+    for (const phrase of UI_TEXT_SUBSTRINGS) {
+      // Case-insensitive substring removal
+      const re = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      cleaned = cleaned.replace(re, '');
+    }
+    // Collapse leftover whitespace runs
+    return cleaned.replace(/\s{2,}/g, ' ').trim();
+  }
+
   function cleanExtractedText(text) {
     if (!text) return '';
-    // Split into lines and filter out UI text
-    const lines = text.split('\n');
+    // First pass: strip known UI chrome substrings (handles concatenated text)
+    let cleaned = stripUISubstrings(text);
+    // Second pass: line-level filtering for short UI-only lines
+    const lines = cleaned.split('\n');
     const cleanedLines = lines.filter(line => {
       const trimmed = line.trim();
       if (!trimmed) return false;
@@ -154,18 +209,24 @@
   function extractDocumentText() {
     // Target ONLY the document pages/canvas, not sidebars or UI elements
 
+    // Helper: check if an element lives inside a UI panel
+    function isInsideUIPanel(el) {
+      return !!el.closest(UI_ELEMENT_SELECTORS);
+    }
+
     // Method 1: Get text from .kix-page elements (most reliable for rendered content)
     const pages = document.querySelectorAll('.kix-page');
     if (pages.length > 0) {
       const textParts = [];
       pages.forEach(page => {
         // Skip if this page is inside a sidebar or panel
-        if (page.closest('.docs-side-panel, .companion-panel, .docs-explore-widget, [role="complementary"]')) return;
+        if (isInsideUIPanel(page)) return;
 
         // Try multiple selectors for line content
         const lines = page.querySelectorAll('.kix-lineview');
         if (lines.length > 0) {
           lines.forEach(line => {
+            if (isInsideUIPanel(line)) return;
             // Try word nodes first
             const spans = line.querySelectorAll('.kix-wordhtmlgenerator-word-node');
             if (spans.length > 0) {
@@ -197,7 +258,7 @@
         const paragraphTexts = [];
         paragraphs.forEach(p => {
           // Skip if parent is a sidebar or panel
-          if (p.closest('.docs-side-panel, .companion-panel, .docs-explore-widget, [role="complementary"]')) return;
+          if (isInsideUIPanel(p)) return;
           const text = p.textContent?.trim();
           if (text && !isUIText(text)) paragraphTexts.push(text);
         });
@@ -212,17 +273,8 @@
     if (canvas) {
       // Get all text content but exclude known UI elements
       const clone = canvas.cloneNode(true);
-      // Remove sidebars, toolbars, Gemini panels, tooltips
-      clone.querySelectorAll(`
-        .docs-side-panel,
-        .companion-panel,
-        .docs-explore-widget,
-        .kix-appview-editor-ruler,
-        [role="complementary"],
-        [role="tooltip"],
-        [aria-label*="Gemini"],
-        .docs-material-gm-popup
-      `.replace(/\s+/g, '')).forEach(el => el.remove());
+      // Remove all UI panels, sidebars, Gemini elements, tooltips, etc.
+      clone.querySelectorAll(UI_ELEMENT_SELECTORS).forEach(el => el.remove());
       const text = clone.textContent?.trim();
       if (text && text.length > 10) {
         return cleanExtractedText(text);
@@ -788,7 +840,31 @@
           <span class="perkins-status-icon">✨</span>
           <span class="perkins-status-text">Looking good! Your writing matches your voice.</span>
         </div>
+        <div class="perkins-post-feedback">
+          <button class="perkins-btn perkins-btn-reanalyze">Analyze Again</button>
+        </div>
       `;
+
+      // Bind re-analyze button
+      content.querySelector('.perkins-btn-reanalyze')?.addEventListener('click', () => {
+        lastAnalyzedText = ''; // Reset to force fresh analysis
+        performAnalysis();
+      });
+
+      // Auto-return to watching state after 4 seconds
+      setTimeout(() => {
+        // Only reset if still showing success (user hasn't navigated away)
+        const status = content.querySelector('.perkins-success');
+        if (status) {
+          content.innerHTML = `
+            <div class="perkins-panel-status">
+              <span class="perkins-status-icon">👀</span>
+              <span class="perkins-status-text">Watching your writing...</span>
+            </div>
+          `;
+        }
+      }, 4000);
+
       return;
     }
 
@@ -844,7 +920,7 @@
 
     // Try to apply the suggestion (copy to clipboard as fallback)
     copyToClipboard(suggestion.suggestion);
-    showTemporaryMessage('Copied suggestion to clipboard!');
+    showTemporaryMessage('Copied to clipboard — paste with Ctrl+V');
   }
 
   function handleReject(index) {
@@ -861,6 +937,8 @@
     // Remove from list
     currentSuggestions.splice(index, 1);
     updatePanel();
+
+    showTemporaryMessage('Got it — Perkins will learn from this');
   }
 
   function copyToClipboard(text) {

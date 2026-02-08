@@ -600,7 +600,16 @@ function updateBadgesDisplay() {
 
   if (elements.improvementPercent) {
     const improvement = state.writingStats.suggestionsReducedPercent || 0;
-    elements.improvementPercent.textContent = improvement > 0 ? `-${improvement}%` : '--';
+    if (improvement > 0) {
+      elements.improvementPercent.textContent = `-${improvement}%`;
+      elements.improvementPercent.title = `${improvement}% fewer suggestions than your first week`;
+    } else if (state.writingStats.firstWeekSuggestions !== null) {
+      elements.improvementPercent.textContent = '0%';
+      elements.improvementPercent.title = 'No improvement yet — keep writing!';
+    } else {
+      elements.improvementPercent.textContent = '--';
+      elements.improvementPercent.title = 'Still collecting baseline data (first 7 days)';
+    }
   }
 }
 
@@ -815,6 +824,47 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Calculate suggestions-reduced improvement percentage.
+// Baseline = average suggestions-per-day in first 7 days of usage.
+// Current  = suggestions today.
+function recalcImprovementPercent() {
+  const stats = state.stats;
+  const ws = state.writingStats;
+
+  // Record baseline: capture first-week average when we have 7+ days of data
+  if (ws.firstWeekSuggestions === null && stats.totalSuggestions > 0) {
+    // Start tracking from today
+    if (!ws._baselineStartDate) {
+      ws._baselineStartDate = new Date().toISOString();
+      ws._baselineDays = 0;
+      ws._baselineTotal = 0;
+    }
+
+    const daysSinceStart = Math.floor(
+      (Date.now() - new Date(ws._baselineStartDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysSinceStart >= 7 && ws._baselineDays > 0) {
+      // Lock in the baseline
+      ws.firstWeekSuggestions = Math.round(ws._baselineTotal / ws._baselineDays);
+    } else {
+      // Still in first week: accumulate
+      ws._baselineDays = Math.max(1, daysSinceStart + 1);
+      ws._baselineTotal = stats.totalSuggestions;
+    }
+  }
+
+  // Calculate improvement vs baseline
+  if (ws.firstWeekSuggestions && ws.firstWeekSuggestions > 0) {
+    const currentRate = stats.suggestionsToday;
+    const reduction = Math.round(
+      ((ws.firstWeekSuggestions - currentRate) / ws.firstWeekSuggestions) * 100
+    );
+    // Clamp to 0-100 range (negative means worse, show 0)
+    ws.suggestionsReducedPercent = Math.max(0, Math.min(100, reduction));
+  }
+}
+
 // Listen for messages from background/content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
@@ -823,6 +873,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       state.recentSuggestions = state.recentSuggestions.slice(0, 10);
       state.stats.suggestionsToday++;
       state.stats.totalSuggestions++;
+
+      // Track improvement over time: record first-week baseline
+      recalcImprovementPercent();
+
       saveState();
       updateUI();
       break;
