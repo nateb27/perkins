@@ -329,9 +329,54 @@
     return panel;
   }
 
+  // Gmail UI text patterns to filter out (signature labels, quoted-text markers, etc.)
+  const GMAIL_UI_PATTERNS = [
+    /^-{2,}\s*$/,                    // signature delimiter "--"
+    /^On .+ wrote:$/,               // quoted reply header
+    /^Sent from my .+$/i,           // mobile signature
+    /^Get Outlook for .+$/i,        // Outlook signature
+    /^\[image:.+\]$/,               // image placeholder
+  ];
+
+  // Clean Gmail compose text by removing UI chrome
+  function cleanGmailText(text) {
+    if (!text) return '';
+    const lines = text.split('\n');
+    const cleaned = [];
+    let inQuotedBlock = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Skip empty lines at the start/end only
+      if (!trimmed && cleaned.length === 0) continue;
+
+      // Detect quoted reply start (stop reading once we hit it)
+      if (/^On .+ wrote:$/.test(trimmed)) {
+        inQuotedBlock = true;
+        break;
+      }
+
+      // Skip lines matching UI patterns
+      if (GMAIL_UI_PATTERNS.some(p => p.test(trimmed))) continue;
+
+      if (!inQuotedBlock) {
+        cleaned.push(line);
+      }
+    }
+
+    // Trim trailing empty lines
+    while (cleaned.length > 0 && !cleaned[cleaned.length - 1].trim()) {
+      cleaned.pop();
+    }
+
+    return cleaned.join('\n').trim();
+  }
+
   // Analyze compose text
   async function analyzeCompose(messageBody, panel) {
-    const text = messageBody.innerText || messageBody.textContent;
+    const rawText = messageBody.innerText || messageBody.textContent;
+    const text = cleanGmailText(rawText);
 
     if (!text || text.trim().length < MIN_TEXT_LENGTH) {
       showEmptyState(panel, 'Write a bit more and I\'ll help you sound like yourself.');
@@ -900,12 +945,10 @@
   }
 
   // Sanitize text to remove any potential HTML/script content
+  // SECURITY: Uses regex stripping instead of innerHTML to avoid parsing untrusted HTML
   function sanitizeText(text) {
-    if (!text) return '';
-    // Strip HTML tags and decode entities
-    const div = document.createElement('div');
-    div.innerHTML = text;
-    return div.textContent || div.innerText || '';
+    if (!text || typeof text !== 'string') return '';
+    return text.replace(/<[^>]*>/g, '').trim();
   }
 
 })();

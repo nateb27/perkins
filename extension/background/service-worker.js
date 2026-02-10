@@ -216,6 +216,9 @@ async function handleMessage(message, sender) {
       handleFeedback(message.suggestion, message.accepted);
       return { success: true };
 
+    case 'TEST_CONNECTION':
+      return await testConnection();
+
     default:
       return { error: 'Unknown message type' };
   }
@@ -774,6 +777,25 @@ CRITICAL RULES:
 // Call the configured AI provider (delegates to lib/providers.js)
 async function callAI(prompt) {
   return callProvider(prompt, settings);
+}
+
+// Test the current provider connection with a minimal prompt
+async function testConnection() {
+  await loadState();
+
+  if (!hasProviderConfigured()) {
+    return { error: 'No provider configured. Save your settings first.' };
+  }
+
+  try {
+    const reply = await callAI('Respond with only the word "OK".');
+    if (reply && reply.trim().length > 0) {
+      return { success: true, provider: settings.provider || 'anthropic' };
+    }
+    return { error: 'Empty response from provider.' };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 // Ambient learning - learn from user's active typing

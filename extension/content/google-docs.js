@@ -143,7 +143,7 @@
     'Take notes with Gemini',
     'Gemini is thinking',
     'Gemini can make mistakes',
-    'undo',  // trailing undo button label from Gemini panel
+    'undoCreated by Gemini',  // concatenated "undo" + Gemini label from side-panel buttons
   ];
 
   // Selectors for UI elements that should never be read as document content.
@@ -463,8 +463,13 @@
     analyzeTimeout = setTimeout(performAnalysis, DEBOUNCE_MS);
   }
 
+  let analysisInFlight = false;
+
   async function performAnalysis() {
     if (!isEnabled) return;
+
+    // Prevent overlapping API calls
+    if (analysisInFlight) return;
 
     // Check cooldown
     const now = Date.now();
@@ -487,6 +492,7 @@
 
     lastAnalyzedText = text;
     lastAnalyzeTime = now;
+    analysisInFlight = true;
 
     // SECURITY: Don't log document text to console
     console.log('Perkins: Analyzing text...');
@@ -505,6 +511,8 @@
     } catch (err) {
       console.error('Perkins: Analysis failed', err);
       showPanelError('Analysis failed. Check your API key.');
+    } finally {
+      analysisInFlight = false;
     }
   }
 
@@ -1029,6 +1037,7 @@
   let reviewSuggestions = [];
   let acceptedSuggestions = new Set();
   let rejectedSuggestions = new Set();
+  let reviewOriginalText = ''; // captured once when modal opens
 
   function createReviewModal() {
     if (reviewModal) return;
@@ -1099,7 +1108,8 @@
     reviewModal.querySelector('.perkins-review-original .perkins-review-panel-content').textContent = text;
     reviewModal.querySelector('.perkins-review-modified .perkins-review-panel-content').textContent = text;
 
-    // Reset state
+    // Reset state — capture original text once for the lifetime of this review
+    reviewOriginalText = text;
     reviewSuggestions = [];
     acceptedSuggestions.clear();
     rejectedSuggestions.clear();
@@ -1107,7 +1117,7 @@
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'REVIEW_DOCUMENT',
-        text: text
+        text: reviewOriginalText
       });
 
       if (response.error) {
@@ -1135,7 +1145,7 @@
         `;
       }
 
-      renderReviewPanels(text);
+      renderReviewPanels(reviewOriginalText);
       updateReviewStats();
 
     } catch (err) {
@@ -1255,7 +1265,7 @@
       });
     }
 
-    renderReviewPanels(extractDocumentText());
+    renderReviewPanels(reviewOriginalText);
     updateReviewStats();
   }
 
@@ -1273,7 +1283,7 @@
       });
     }
 
-    renderReviewPanels(extractDocumentText());
+    renderReviewPanels(reviewOriginalText);
     updateReviewStats();
   }
 
@@ -1288,7 +1298,7 @@
   }
 
   function copyFinalVersion() {
-    let finalText = extractDocumentText();
+    let finalText = reviewOriginalText;
 
     // Apply accepted changes (sort by position, reverse order)
     const sortedAccepted = reviewSuggestions

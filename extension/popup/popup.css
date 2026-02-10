@@ -586,6 +586,16 @@ select:focus {
   font-size: 14px;
 }
 
+/* Settings button row */
+.settings-button-row {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-button-row .btn {
+  flex: 1;
+}
+
 /* Dividers */
 .settings-divider {
   height: 1px;

@@ -48,6 +48,7 @@ const elements = {
   apiKeyGroup: document.getElementById('api-key-group'),
   toggleKeyBtn: document.getElementById('toggle-key'),
   saveSettingsBtn: document.getElementById('save-settings'),
+  testConnectionBtn: document.getElementById('test-connection'),
   intensitySelect: document.getElementById('intensity'),
   passiveVoiceCheck: document.getElementById('passive-voice'),
   sentenceLengthCheck: document.getElementById('sentence-length'),
@@ -375,6 +376,23 @@ function initSettings() {
     state.settings.ollamaUrl = elements.ollamaUrlInput?.value.trim() || '';
     state.settings.ollamaModel = elements.ollamaModelInput?.value.trim() || '';
 
+    // Request host permission for custom endpoint URL (needs user gesture)
+    const customUrl = state.settings.customEndpoint;
+    if (customUrl) {
+      try {
+        const origin = new URL(customUrl).origin + '/*';
+        const granted = await chrome.permissions.request({
+          origins: [origin]
+        });
+        if (!granted) {
+          showToast('Permission denied for custom endpoint. Requests may be blocked.', 'error');
+        }
+      } catch (err) {
+        // Permission request can fail if origin is already granted or invalid
+        console.warn('Permission request for custom endpoint:', err.message);
+      }
+    }
+
     await saveState();
     updateUI();
     showToast('Settings saved!', 'success');
@@ -386,6 +404,29 @@ function initSettings() {
       learnedExceptions: state.learnedExceptions
     });
   });
+
+  // Test connection button
+  if (elements.testConnectionBtn) {
+    elements.testConnectionBtn.addEventListener('click', async () => {
+      elements.testConnectionBtn.disabled = true;
+      elements.testConnectionBtn.textContent = 'Testing...';
+
+      try {
+        const result = await chrome.runtime.sendMessage({ type: 'TEST_CONNECTION' });
+
+        if (result.success) {
+          showToast(`Connected to ${result.provider}!`, 'success');
+        } else {
+          showToast(result.error || 'Connection failed', 'error');
+        }
+      } catch (err) {
+        showToast('Connection test failed: ' + err.message, 'error');
+      }
+
+      elements.testConnectionBtn.disabled = false;
+      elements.testConnectionBtn.textContent = 'Test Connection';
+    });
+  }
 }
 
 // Voice training initialization
