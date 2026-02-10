@@ -45,6 +45,7 @@ const elements = {
   // Settings tab
   providerRadios: document.querySelectorAll('input[name="provider"]'),
   apiKeyInput: document.getElementById('api-key'),
+  apiKeyGroup: document.getElementById('api-key-group'),
   toggleKeyBtn: document.getElementById('toggle-key'),
   saveSettingsBtn: document.getElementById('save-settings'),
   intensitySelect: document.getElementById('intensity'),
@@ -55,6 +56,16 @@ const elements = {
   ambientLearningCheck: document.getElementById('ambient-learning'),
   styleGuideInput: document.getElementById('style-guide'),
   learnedExceptions: document.getElementById('learned-exceptions'),
+  // Custom endpoint fields
+  customEndpointInput: document.getElementById('custom-endpoint'),
+  customModelInput: document.getElementById('custom-model'),
+  customEndpointGroup: document.getElementById('custom-endpoint-group'),
+  customModelGroup: document.getElementById('custom-model-group'),
+  // Ollama fields
+  ollamaUrlInput: document.getElementById('ollama-url'),
+  ollamaModelInput: document.getElementById('ollama-model'),
+  ollamaUrlGroup: document.getElementById('ollama-url-group'),
+  ollamaModelGroup: document.getElementById('ollama-model-group'),
 
   // Setup progress
   setupProgress: document.getElementById('setup-progress'),
@@ -94,7 +105,13 @@ let state = {
       wordChoice: true,
       grammar: true
     },
-    ambientLearning: false // Opt-in ambient learning
+    ambientLearning: false, // Opt-in ambient learning
+    // Custom endpoint
+    customEndpoint: '',
+    customModel: '',
+    // Ollama
+    ollamaUrl: '',
+    ollamaModel: '',
   },
   voiceProfile: {
     samples: [],
@@ -252,6 +269,33 @@ function initTabs() {
   });
 }
 
+// Show/hide provider-specific fields based on the selected provider
+function updateProviderFields(provider) {
+  const isCustom = provider === 'custom';
+  const isOllama = provider === 'ollama';
+  const needsKey = provider === 'anthropic' || provider === 'openai';
+
+  // API key group: show for anthropic/openai, optional for custom, hide for ollama
+  if (elements.apiKeyGroup) {
+    elements.apiKeyGroup.style.display = isOllama ? 'none' : '';
+    // Update hint for custom
+    const hint = elements.apiKeyGroup.querySelector('.setting-hint');
+    if (hint) {
+      hint.textContent = isCustom
+        ? 'Optional. Include if your endpoint requires authentication.'
+        : 'Your API key is stored locally and never sent to our servers.';
+    }
+  }
+
+  // Custom endpoint fields
+  if (elements.customEndpointGroup) elements.customEndpointGroup.style.display = isCustom ? '' : 'none';
+  if (elements.customModelGroup) elements.customModelGroup.style.display = isCustom ? '' : 'none';
+
+  // Ollama fields
+  if (elements.ollamaUrlGroup) elements.ollamaUrlGroup.style.display = isOllama ? '' : 'none';
+  if (elements.ollamaModelGroup) elements.ollamaModelGroup.style.display = isOllama ? '' : 'none';
+}
+
 // Settings initialization
 function initSettings() {
   // Load current settings into UI
@@ -259,6 +303,7 @@ function initSettings() {
     radio.checked = radio.value === state.settings.provider;
     radio.addEventListener('change', () => {
       state.settings.provider = radio.value;
+      updateProviderFields(radio.value);
     });
   });
 
@@ -269,6 +314,15 @@ function initSettings() {
   } else {
     elements.apiKeyInput.value = state.settings.apiKey;
   }
+
+  // Custom endpoint fields
+  if (elements.customEndpointInput) elements.customEndpointInput.value = state.settings.customEndpoint || '';
+  if (elements.customModelInput) elements.customModelInput.value = state.settings.customModel || '';
+
+  // Ollama fields
+  if (elements.ollamaUrlInput) elements.ollamaUrlInput.value = state.settings.ollamaUrl || '';
+  if (elements.ollamaModelInput) elements.ollamaModelInput.value = state.settings.ollamaModel || '';
+
   elements.intensitySelect.value = state.settings.intensity;
   elements.passiveVoiceCheck.checked = state.settings.checks.passiveVoice;
   elements.sentenceLengthCheck.checked = state.settings.checks.sentenceLength;
@@ -276,6 +330,9 @@ function initSettings() {
   elements.checkGrammarCheck.checked = state.settings.checks.grammar;
   elements.ambientLearningCheck.checked = state.settings.ambientLearning || false;
   elements.styleGuideInput.value = state.settings.styleGuide || '';
+
+  // Show correct provider fields on load
+  updateProviderFields(state.settings.provider);
 
   // Toggle API key visibility
   elements.toggleKeyBtn.addEventListener('click', () => {
@@ -301,6 +358,7 @@ function initSettings() {
       state.settings.apiKey = rawApiKey;
     }
 
+    state.settings.provider = document.querySelector('input[name="provider"]:checked')?.value || 'anthropic';
     state.settings.intensity = elements.intensitySelect.value;
     state.settings.styleGuide = elements.styleGuideInput.value.trim();
     state.settings.checks.passiveVoice = elements.passiveVoiceCheck.checked;
@@ -308,6 +366,14 @@ function initSettings() {
     state.settings.checks.wordChoice = elements.wordChoiceCheck.checked;
     state.settings.checks.grammar = elements.checkGrammarCheck.checked;
     state.settings.ambientLearning = elements.ambientLearningCheck.checked;
+
+    // Custom endpoint
+    state.settings.customEndpoint = elements.customEndpointInput?.value.trim() || '';
+    state.settings.customModel = elements.customModelInput?.value.trim() || '';
+
+    // Ollama
+    state.settings.ollamaUrl = elements.ollamaUrlInput?.value.trim() || '';
+    state.settings.ollamaModel = elements.ollamaModelInput?.value.trim() || '';
 
     await saveState();
     updateUI();
@@ -450,9 +516,16 @@ function switchToTab(tabName) {
 
 // Update setup progress bar
 function updateSetupProgress() {
-  const hasApiKey = !!state.settings.apiKey;
+  const provider = state.settings.provider || 'anthropic';
+  const keylessProviders = ['ollama', 'custom'];
+  const hasProvider = keylessProviders.includes(provider)
+    ? (provider === 'ollama' || !!state.settings.customEndpoint)
+    : !!state.settings.apiKey;
   const hasVoice = state.voiceProfile.samples.length > 0;
-  const isFullySetup = hasApiKey && hasVoice;
+  const isFullySetup = hasProvider && hasVoice;
+
+  // Alias for backward compat within this function
+  const hasApiKey = hasProvider;
 
   // Show/hide progress bar
   if (elements.setupProgress) {
@@ -627,13 +700,18 @@ function updateUI() {
   updateBadgesDisplay();
 
   // Update status indicator
-  const isConfigured = state.settings.apiKey && state.voiceProfile.samples.length > 0;
+  const provider = state.settings.provider || 'anthropic';
+  const keylessProviders = ['ollama', 'custom'];
+  const providerReady = keylessProviders.includes(provider)
+    ? (provider === 'ollama' || !!state.settings.customEndpoint)
+    : !!state.settings.apiKey;
+  const isConfigured = providerReady && state.voiceProfile.samples.length > 0;
   const isActive = isConfigured && state.coachEnabled;
 
   elements.status.classList.toggle('active', isActive);
 
-  if (!state.settings.apiKey) {
-    elements.statusText.textContent = 'No API key';
+  if (!providerReady) {
+    elements.statusText.textContent = 'No provider configured';
   } else if (state.voiceProfile.samples.length === 0) {
     elements.statusText.textContent = 'No voice profile';
   } else if (!state.coachEnabled) {
@@ -974,8 +1052,8 @@ function showTutorial() {
       highlight: null
     },
     {
-      title: 'Step 1: Add Your API Key',
-      content: 'First, add your Anthropic or OpenAI API key. Your key is encrypted and stored locally - we never see it.',
+      title: 'Step 1: Choose Your AI',
+      content: 'Pick your AI provider: Claude, GPT-4o, a custom endpoint, or Ollama for fully local analysis. Your keys are encrypted and stored locally.',
       icon: '🔑',
       highlight: 'settings'
     },

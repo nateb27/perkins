@@ -174,7 +174,7 @@
         <div class="privacy-notice">
           <div class="privacy-icon">🔒</div>
           <div class="privacy-text">
-            <strong>Privacy Notice:</strong> Your writing samples and text are sent to your chosen AI provider (Anthropic or OpenAI) for analysis. Your API key is encrypted and stored locally. We never see your writing or keys.
+            <strong>Privacy Notice:</strong> Your writing is sent to your chosen AI provider for analysis. With Ollama, everything stays on your machine. Your API key is encrypted and stored locally. We never see your writing or keys.
           </div>
         </div>
 
@@ -192,12 +192,23 @@
             <label class="radio">
               <input type="radio" name="provider" value="openai">
               <span class="radio-mark"></span>
-              <span class="radio-text">GPT-4 (OpenAI)</span>
+              <span class="radio-text">GPT-4o (OpenAI)</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="provider" value="custom">
+              <span class="radio-mark"></span>
+              <span class="radio-text">Custom Endpoint</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="provider" value="ollama">
+              <span class="radio-mark"></span>
+              <span class="radio-text">Ollama (Local)</span>
             </label>
           </div>
         </div>
 
-        <div class="setting-group">
+        <!-- API Key (Anthropic / OpenAI / optionally Custom) -->
+        <div class="setting-group" id="api-key-group">
           <label class="setting-label" for="api-key">API Key</label>
           <div class="input-group">
             <input
@@ -214,6 +225,49 @@
             </button>
           </div>
           <span class="setting-hint">Your API key is stored locally and never sent to our servers.</span>
+        </div>
+
+        <!-- Custom Endpoint fields -->
+        <div class="setting-group provider-custom-fields" id="custom-endpoint-group" style="display:none">
+          <label class="setting-label" for="custom-endpoint">Endpoint URL</label>
+          <input
+            type="url"
+            id="custom-endpoint"
+            placeholder="https://your-api.example.com/v1/chat/completions"
+            autocomplete="off"
+          >
+          <span class="setting-hint">Any OpenAI-compatible chat completions endpoint.</span>
+        </div>
+        <div class="setting-group provider-custom-fields" id="custom-model-group" style="display:none">
+          <label class="setting-label" for="custom-model">Model name</label>
+          <input
+            type="text"
+            id="custom-model"
+            placeholder="e.g. gpt-4o, mistral-large, llama3"
+            autocomplete="off"
+          >
+        </div>
+
+        <!-- Ollama fields -->
+        <div class="setting-group provider-ollama-fields" id="ollama-url-group" style="display:none">
+          <label class="setting-label" for="ollama-url">Ollama URL</label>
+          <input
+            type="url"
+            id="ollama-url"
+            placeholder="http://localhost:11434"
+            autocomplete="off"
+          >
+          <span class="setting-hint">Default: http://localhost:11434</span>
+        </div>
+        <div class="setting-group provider-ollama-fields" id="ollama-model-group" style="display:none">
+          <label class="setting-label" for="ollama-model">Model</label>
+          <input
+            type="text"
+            id="ollama-model"
+            placeholder="llama3"
+            autocomplete="off"
+          >
+          <span class="setting-hint">Run <code>ollama list</code> to see available models.</span>
         </div>
 
         <button class="btn btn-primary" id="save-settings">Save Settings</button>

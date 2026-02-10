@@ -3,7 +3,7 @@
  * Handles AI API calls and message routing
  */
 
-import { decrypt, isEncrypted } from '../lib/crypto.js';
+import { callProvider } from '../lib/providers.js';
 
 // State cache (loaded from storage)
 let settings = null;
@@ -119,6 +119,15 @@ async function loadState() {
   } catch (err) {
     console.error('Failed to load state:', err);
   }
+}
+
+// Check whether the active provider has enough config to make calls
+function hasProviderConfigured() {
+  if (!settings) return false;
+  const p = settings.provider || 'anthropic';
+  if (p === 'ollama') return true; // no key needed
+  if (p === 'custom') return !!settings.customEndpoint; // needs URL
+  return !!settings.apiKey; // anthropic / openai need a key
 }
 
 // Message handler with sender validation
@@ -237,7 +246,9 @@ async function updateVoiceProfile(samples) {
     voiceProfile = { samples: [], summary: null };
   }
 
-  if (!settings?.apiKey) {
+  const keylessProviders = ['ollama', 'custom'];
+  const needsKey = !keylessProviders.includes(settings?.provider);
+  if (needsKey && !settings?.apiKey) {
     return { error: 'No API key configured. Go to Settings tab and add your API key.' };
   }
 
@@ -330,8 +341,8 @@ async function learnFromDocument(text, source, title) {
     type: 'DOCUMENT_ANALYZED'
   }).catch(() => {});
 
-  // Re-generate voice summary if we have an API key
-  if (settings?.apiKey) {
+  // Re-generate voice summary if a provider is configured
+  if (hasProviderConfigured()) {
     try {
       const result = await updateVoiceProfile(voiceProfile.samples);
 
@@ -488,7 +499,7 @@ async function importFromUrl(url) {
     }).catch(() => {});
 
     // Update voice summary
-    if (settings?.apiKey) {
+    if (hasProviderConfigured()) {
       await updateVoiceProfile(voiceProfile.samples);
 
       // Notify popup that a pattern was learned
@@ -566,7 +577,11 @@ async function analyzeText(text, context = {}) {
 
   // SECURITY: Reduced logging
 
-  if (!settings?.apiKey) {
+  // Providers that don't require an API key
+  const keylessProviders = ['ollama', 'custom'];
+  const needsKey = !keylessProviders.includes(settings?.provider);
+
+  if (needsKey && !settings?.apiKey) {
     return { error: 'No API key configured' };
   }
 
@@ -756,103 +771,9 @@ CRITICAL RULES:
   }
 }
 
-// Call AI API (Claude or OpenAI)
+// Call the configured AI provider (delegates to lib/providers.js)
 async function callAI(prompt) {
-  if (settings.provider === 'anthropic') {
-    return await callClaude(prompt);
-  } else {
-    return await callOpenAI(prompt);
-  }
-}
-
-/**
- * Get decrypted API key
- */
-async function getApiKey() {
-  const storedKey = settings.apiKey;
-  if (!storedKey) return '';
-
-  // Check if key is encrypted (doesn't start with sk-)
-  if (isEncrypted(storedKey)) {
-    return await decrypt(storedKey);
-  }
-
-  // Return as-is if not encrypted (legacy or just set)
-  return storedKey;
-}
-
-// Call Claude API
-async function callClaude(prompt) {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('No API key configured');
-  }
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.content[0].text;
-}
-
-// Call OpenAI API
-async function callOpenAI(prompt) {
-  const apiKey = await getApiKey();
-  if (!apiKey) {
-    throw new Error('No API key configured');
-  }
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful writing coach that helps users maintain their unique voice.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
+  return callProvider(prompt, settings);
 }
 
 // Ambient learning - learn from user's active typing
@@ -909,8 +830,8 @@ async function ambientLearn(text, typedCharCount) {
     wordCount: Math.round(typedCharCount / 5) // Estimate words from chars
   }).catch(() => {});
 
-  // Update voice profile if we have API key
-  if (settings?.apiKey) {
+  // Update voice profile if a provider is configured
+  if (hasProviderConfigured()) {
     try {
       const result = await updateVoiceProfile(voiceProfile.samples);
 
@@ -994,8 +915,8 @@ async function reviewDocument(text) {
   // Ensure we have latest state (worker may have been idle)
   await loadState();
 
-  if (!settings?.apiKey) {
-    return { error: 'No API key configured' };
+  if (!hasProviderConfigured()) {
+    return { error: 'No AI provider configured' };
   }
 
   if (!voiceProfile?.summary) {
@@ -1106,8 +1027,8 @@ RULES:
 // ============================================
 
 async function handleChatMessage(userMessage, context, history) {
-  if (!settings?.apiKey) {
-    return { error: 'No API key configured' };
+  if (!hasProviderConfigured()) {
+    return { error: 'No AI provider configured' };
   }
 
   // Rate limiting
@@ -1152,8 +1073,8 @@ Respond helpfully and conversationally. Keep responses concise (2-3 paragraphs m
 // ============================================
 
 async function generateInVoice(prompt, length = 'medium') {
-  if (!settings?.apiKey) {
-    return { error: 'No API key configured' };
+  if (!hasProviderConfigured()) {
+    return { error: 'No AI provider configured' };
   }
 
   if (!voiceProfile?.summary) {

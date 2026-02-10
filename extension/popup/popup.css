@@ -360,6 +360,13 @@ textarea::placeholder {
   margin-top: 4px;
 }
 
+.setting-hint code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
 .input-group {
   display: flex;
   gap: 8px;
@@ -371,6 +378,7 @@ textarea::placeholder {
 
 input[type="text"],
 input[type="password"],
+input[type="url"],
 select {
   width: 100%;
   padding: 10px 12px;
