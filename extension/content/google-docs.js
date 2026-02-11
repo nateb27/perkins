@@ -1086,6 +1086,16 @@
     reviewModal.querySelector('.perkins-btn-close-review').addEventListener('click', closeReviewModal);
     reviewModal.querySelector('.perkins-btn-apply').addEventListener('click', applyToDocument);
     reviewModal.querySelector('.perkins-btn-copy-final').addEventListener('click', copyFinalVersion);
+
+    // Sync scroll between panels (bound once here, not on every re-render)
+    const origPanel = reviewModal.querySelector('.perkins-review-original .perkins-review-panel-content');
+    const modPanel = reviewModal.querySelector('.perkins-review-modified .perkins-review-panel-content');
+    origPanel.addEventListener('scroll', () => {
+      modPanel.scrollTop = origPanel.scrollTop;
+    });
+    modPanel.addEventListener('scroll', () => {
+      origPanel.scrollTop = modPanel.scrollTop;
+    });
   }
 
   async function openReviewModal() {
@@ -1127,7 +1137,7 @@
         return;
       }
 
-      reviewSuggestions = response.suggestions || [];
+      reviewSuggestions = (response.suggestions || []).map((s, i) => ({ ...s, index: i }));
       const summary = response.summary || '';
 
       if (reviewSuggestions.length === 0) {
@@ -1160,28 +1170,8 @@
     const originalPanel = reviewModal.querySelector('.perkins-review-original .perkins-review-panel-content');
     const modifiedPanel = reviewModal.querySelector('.perkins-review-modified .perkins-review-panel-content');
 
-    // Build original panel with strikethrough highlights
+    // Build HTML for original panel with strikethrough highlights
     let originalHtml = escapeHtml(originalText);
-    let modifiedText = originalText;
-
-    // Sort suggestions by position (reverse order to preserve indices)
-    const sortedSuggestions = reviewSuggestions
-      .map((s, i) => ({ ...s, index: i }))
-      .sort((a, b) => {
-        const posA = originalText.indexOf(a.original);
-        const posB = originalText.indexOf(b.original);
-        return posB - posA; // Reverse order
-      });
-
-    // Apply changes to modified text (from end to start to preserve positions)
-    for (const s of sortedSuggestions) {
-      if (acceptedSuggestions.has(s.index)) {
-        modifiedText = modifiedText.replace(s.original, s.suggestion);
-      }
-    }
-
-    // Build HTML for original panel
-    originalHtml = escapeHtml(originalText);
     for (const s of reviewSuggestions) {
       const isAccepted = acceptedSuggestions.has(s.index);
       const isRejected = rejectedSuggestions.has(s.index);
@@ -1242,13 +1232,6 @@
       });
     });
 
-    // Sync scroll between panels
-    originalPanel.addEventListener('scroll', () => {
-      modifiedPanel.scrollTop = originalPanel.scrollTop;
-    });
-    modifiedPanel.addEventListener('scroll', () => {
-      originalPanel.scrollTop = modifiedPanel.scrollTop;
-    });
   }
 
   function acceptSuggestion(index) {

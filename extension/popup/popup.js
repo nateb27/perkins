@@ -93,6 +93,15 @@ const WRITING_MILESTONES = [
   { words: 1084000, name: 'Harry Potter Series', icon: '🏰', description: 'All 7 books' }
 ];
 
+// Check if the currently selected provider has enough config to operate.
+// Mirrors the logic in service-worker.js `hasProviderConfigured()`.
+function hasProviderConfigured(s) {
+  const p = s.provider || 'anthropic';
+  if (p === 'ollama') return true;
+  if (p === 'custom') return !!s.customEndpoint;
+  return !!s.apiKey;
+}
+
 // State
 let state = {
   settings: {
@@ -154,8 +163,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSetupFlow();
   updateUI();
 
-  // Default to Settings tab if no API key
-  if (!state.settings.apiKey) {
+  // Default to Settings tab if no provider is configured
+  if (!hasProviderConfigured(state.settings)) {
     switchToTab('settings');
   }
 
@@ -536,12 +545,12 @@ function initSetupFlow() {
 
   if (elements.setupStepVoice) {
     elements.setupStepVoice.addEventListener('click', () => {
-      // Only allow clicking if API key is set
-      if (state.settings.apiKey) {
+      // Only allow clicking if a provider is configured
+      if (hasProviderConfigured(state.settings)) {
         switchToTab('voice');
       } else {
         switchToTab('settings');
-        showToast('Add your API key first', 'info');
+        showToast('Set up your AI provider first', 'info');
       }
     });
   }
@@ -1020,12 +1029,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           // Keep only last 50 exceptions
           state.learnedExceptions = state.learnedExceptions.slice(-50);
-          saveState();
-          updateLearnedExceptions();
 
           // Increment patterns learned
           state.writingStats.patternsLearned++;
+
+          // Single save for both mutations
           saveState();
+          updateLearnedExceptions();
           updateBadgesDisplay();
         }
       }

@@ -249,10 +249,8 @@ async function updateVoiceProfile(samples) {
     voiceProfile = { samples: [], summary: null };
   }
 
-  const keylessProviders = ['ollama', 'custom'];
-  const needsKey = !keylessProviders.includes(settings?.provider);
-  if (needsKey && !settings?.apiKey) {
-    return { error: 'No API key configured. Go to Settings tab and add your API key.' };
+  if (!hasProviderConfigured()) {
+    return { error: 'No AI provider configured. Go to Settings tab and set up your provider.' };
   }
 
   voiceProfile.samples = samples;
@@ -578,14 +576,8 @@ async function analyzeText(text, context = {}) {
   // Ensure we have latest state (worker may have been idle)
   await loadState();
 
-  // SECURITY: Reduced logging
-
-  // Providers that don't require an API key
-  const keylessProviders = ['ollama', 'custom'];
-  const needsKey = !keylessProviders.includes(settings?.provider);
-
-  if (needsKey && !settings?.apiKey) {
-    return { error: 'No API key configured' };
+  if (!hasProviderConfigured()) {
+    return { error: 'No AI provider configured' };
   }
 
   if (!voiceProfile?.summary) {
